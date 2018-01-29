@@ -1,5 +1,6 @@
 # Syllabus
 Course Participant: Ariana Olson
+
 Advisor: Paul Ruvolo
 ## Overview
 ### Description

@@ -26,6 +26,9 @@ So the behavior of the network will not change as long as every weight and bias 
 ### Add a final layer to the simple digit classifier network that converts digits to binary. Choose weights and biases assuming that a correct digit will have an activation > 0.99 and an incorrect digit will have an activation of < 0.01.
 
 2^0 neuron: w = [0 1 0 1 0 1 0 1 0 1]; b = -0.14
+
 2^1 neuron: w = [0 0 1 1 0 0 1 1 0 0]; b = -0.04
+
 2^2 neuron: w = [0 0 0 0 1 1 1 1 0 0]; b = -0.04
+
 2^3 neuron: w = [0 0 0 0 0 0 0 0 1 1]; b = -0.11

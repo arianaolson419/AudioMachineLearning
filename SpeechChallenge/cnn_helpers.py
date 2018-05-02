@@ -332,9 +332,12 @@ def load_audio_clip(filepaths, desired_channels=1, noise=False):
                 label = 'unknown'
             labels.append(label)
             filepath = base + filepath.strip('\n')
-            data[i, :] = sess.run(audio,
-                    feed_dict={wav_filename_placeholder:
-                        filepath}).flatten()
+            if os.path.exists(filepath):
+                data[i, :] = sess.run(audio,
+                        feed_dict={wav_filename_placeholder:
+                            filepath}).flatten()
+            else:
+                continue
     sample_rate = 16000
     return sample_rate, data, labels
             

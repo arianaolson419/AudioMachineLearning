@@ -115,6 +115,7 @@ with tf.Session() as sess:
     train_losses = []
     acc = 0
 
+    train_pos = 0
     test_pos = 0
     for i in range(training_iterations):
         train_pos = 0

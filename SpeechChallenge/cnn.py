@@ -108,17 +108,18 @@ opt = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
 
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
+    num_batches = 10
     training_iterations = 50
     testing_iterations = 50
     
     train_losses = []
     acc = 0
 
+    train_pos = 0
     test_pos = 0
-    for i in range(1):
-        train_pos = 0
+    for i in range(training_iterations):
         print("training iteration: {}".format(i))
-        for j in tqdm(range(training_iterations)):
+        for j in tqdm(range(num_batches)):
             spectrograms, lbls, train_pos = cnn_helpers.load_and_process_batch(
                     batch_size,
                     train_pos,

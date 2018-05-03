@@ -113,11 +113,15 @@ with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
     num_batches = 10
     training_iterations = 10
-    testing_iterations = 50
+    validation_size = 50
     
     train_losses = []
-    acc = 0
+    for i in range(training_iterations):
+        files, batch_labels, new_position = cnn_helpers.get_filenames(batch_size, position, 'training')
+        _, lossval = sess.run((opt, loss), feed_dict={filenames: files, labels: batch_labels})
+        position = new_pos
 
+        if i % 10 == train_losses.append(lossval)
 
-    plt.plot(train_losses)
-    plt.show()
+    for i in range(validation_size):
+        files, batch_labels, new_position = cnn_helpers.get_filenames(batch_size, position, 'validation')

@@ -182,13 +182,13 @@ def get_filenames(batch_size, file_pointer=0, mode='training'):
         for _ in range(batch_size):
             filepaths.append(base + f.readline().strip('\n'))
         new_position = f.tell()
-    label_strings = [path.split('/')[2] for path in filenames]
+    label_strings = [path.split('/')[2] for path in filepaths]
     get_labels = lambda x: x.split('/')[2]
     legal_labels = lambda x: 'unknown' if get_labels(x) not in legal_commands else get_labels(x)
     labels_to_ints = lambda x: label_dict[legal_labels(x)]
     
-    label_ints = list(map(labels_to_ints
-    return filepaths, labels, new_position
+    label_ints = list(map(labels_to_ints, filepaths))
+    return filepaths, label_ints, new_position
 
 # TODO: make this part of the audio processing workflow. Don't return real values!
 def load_random_background_noise(samples=16000, mode='all'):
@@ -262,7 +262,7 @@ def compute_logmel_spectrograms(audio, sample_rate, frame_length_seconds, frame_
 
     Returns
     -------
-    A tensor of spectrograms of shape (num_signals, time_units, mel_bins)
+    A tensor of spectrograms of shape (num_signals, time_units, mel_bins) and dtype tf.float32
     """
     # Convert time parameters to samples
     frame_length_samples = int(frame_length_seconds * sample_rate)

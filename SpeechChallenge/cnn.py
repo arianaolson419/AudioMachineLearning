@@ -55,8 +55,11 @@ stride_width = 1    # v
 
 he = tf.contrib.keras.initializers.he_normal
 
+filenames = tf.placeholder(tf.string, [batch_size])
+labels = tf.placeholder(tf.int32, [batch_size])
+
 # Define the cnn-one-fpool13 network
-input_spectrograms = tf.placeholder(shape=(batch_size, 98, 40), dtype=tf.float32)
+input_spectrograms = cnn_helpers.load_and_process_batch(filepaths, network_mode=
 input_layer = tf.expand_dims(input_spectrograms, 3)
 
 conv1 = tf.layers.conv2d(
@@ -115,34 +118,6 @@ with tf.Session() as sess:
     train_losses = []
     acc = 0
 
-    train_pos = 0
-    test_pos = 0
-    for i in range(training_iterations):
-        train_pos = 0
-        print("training iteration: {}".format(i))
-        for j in tqdm(range(num_batches)):
-            spectrograms, lbls, train_pos = cnn_helpers.load_and_process_batch(
-                    batch_size,
-                    train_pos,
-                    0.025, 0.010, 0.05)
-            _, lossval = sess.run(
-                    (opt, loss),
-                    feed_dict={
-                        labels: [label_dict[lbl] for lbl in lbls],
-                        input_spectrograms: spectrograms})
-            train_losses.append(lossval)
-
-    for i in tqdm(range(testing_iterations)):
-        spectrograms, labels, test_pos = cnn_helpers.load_and_process_batch(
-            batch_size,
-            test_pos,
-            0.025,
-            0.010,
-            0.05)
-        label = sess.run(tf.argmax(output_layer, axis=1), feed_dict={input_spectrograms: spectrograms})
-        labels_int = [label_dict[lbl] for lbl in labels]
-        acc += np.sum(label == labels_int)
-    print('accuracy', float(acc) / (testing_iterations * batch_size))
 
     plt.plot(train_losses)
     plt.show()

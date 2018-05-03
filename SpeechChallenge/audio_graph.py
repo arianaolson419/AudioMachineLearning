@@ -1,15 +1,19 @@
+import numpy as np
+from tqdm import tqdm
 import tensorflow as tf
 import cnn_helpers as cnn
 
-filepaths = tf.placeholder(tf.string, [])
+batch_size = 100
+filepaths = tf.placeholder(tf.string, [batch_size])
 
-signal_list = []
-for filepath in filepaths:
-    audio = cnn.load_audio_tf(filepath)
-    signal_list.append(audio)
-
-audio_signals = tf.stack(signal_list)
-spectrogram = cnn.compute_logmel_spectrograms(audio_signals, 16000, 0.025, 0.010)
+spectrogram = cnn.load_and_process_batch(filepaths)
+print(spectrogram.shape)
 
 with tf.Session() as sess:
-    sess.run(spectrogram, feed_dict={filepath: 'train/audio/stop/01d22d03_nohash_0.wav'})
+    position = 0
+    for _ in range(5):
+        for _ in tqdm(range(10)):
+            files, new_position = cnn.get_filenames(batch_size, position)
+            spectrograms = sess.run(spectrogram, feed_dict={filepaths: files})
+            postion = new_position
+

@@ -109,8 +109,8 @@ opt = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
     num_batches = 10
-    training_iterations = 50
-    testing_iterations = 500
+    training_iterations = 10
+    testing_iterations = 50
     
     train_losses = []
     acc = 0

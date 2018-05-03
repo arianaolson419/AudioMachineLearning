@@ -341,17 +341,53 @@ def load_audio_clip(filepaths, desired_channels=1, noise=False):
     sample_rate = 16000
     return sample_rate, data, labels
             
+def load_audio_tf(filepath, desired_channels=1, desired_samples=16000):
+    """Defines the piece of the computational graph that loads an audio file.
+
+    Parameters
+    ----------
+    filepath : a tensor of type tf.string representing the wav file being loaded.
+    desired_channels : the number of channels the wav file should be decoded into.
+        Defaults to 1.
+    desired_samples : the number of samples to be loaded from the wav file.
+        Defaults to 16000.
+
+    Returns
+    -------
+    a tensor representing a loaded wav file
+    """
+    with tf.Session() as sess:
+        wav_loader = io_ops.read_file(filepath)
+        wav_decoder = contrib_audio.decode_wav(
+                wav_loader,
+                desired_channels=desired_channels,
+                desired_samples=desired_samples)
+        audio = wav_decoder.audio
+    return audio
 
 # Process data to input into network
 def compute_logmel_spectrograms(audio, sample_rate, frame_length_seconds, frame_step_seconds):
+    """Computes the log-mel spectrograms of a batch of audio clips
+
+    Parameters
+    ----------
+    audio : a two dimensional tensor of audio samples of shape (num_samples, num_signals)
+    sample_rate : the sample rate of the audio signals in Hz
+    frame_length_seconds : the width of the STFT, in seconds
+    frame_step_seconds : the number of seconds the STFTs are shifted from each other
+
+    Returns
+    -------
+    A tensor of spectrograms of shape (num_signals, time_units, mel_bins)
+    """
     # Convert time parameters to samples
     frame_length_samples = int(frame_length_seconds * sample_rate)
     frame_step_samples = int(frame_step_seconds * sample_rate)
 
-    signals = tf.placeholder(tf.float32, [None, None])
+    #signals = tf.placeholder(tf.float32, [None, None])
 
     # Create a spectrogram by taking the magnitude of the Short Time fourier Transform
-    stft = contrib_signal.stft(signals, frame_length=frame_length_samples,
+    stft = contrib_signal.stft(audio, frame_length=frame_length_samples,
             frame_step=frame_step_samples, fft_length=frame_length_samples)
     
     magnitude_spectrograms = tf.abs(stft)
@@ -372,11 +408,13 @@ def compute_logmel_spectrograms(audio, sample_rate, frame_length_seconds, frame_
     log_offset = 1e-6
     log_mel_spectrograms = tf.log(mel_spectrograms + log_offset)
 
-    with tf.Session() as sess:
-        spectrogram_batch = sess.run(log_mel_spectrograms, feed_dict={signals: audio})
-    return spectrogram_batch       
+    return log_mel_spectrograms
+   # with tf.Session() as sess:
+   #     spectrogram_batch = sess.run(log_mel_spectrograms, feed_dict={signals: audio})
+   # return spectrogram_batch       
 
-def load_and_process_batch(batch_size,
+def load_and_process_batch(
+        batch_size,
         file_pointer,
         frame_length,
         frame_step,

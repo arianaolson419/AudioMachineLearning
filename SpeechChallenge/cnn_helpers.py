@@ -295,14 +295,12 @@ def compute_logmel_spectrograms(audio, sample_rate, frame_length_seconds, frame_
    #     spectrogram_batch = sess.run(log_mel_spectrograms, feed_dict={signals: audio})
    # return spectrogram_batch       
 
-def load_and_process_batch(filepaths, network_mode='training', desired_channels=1, desired_samples=16000, frame_length=0.025, frame_width=0.010):
+def load_and_process_batch(filepaths, desired_channels=1, desired_samples=16000, frame_length=0.025, frame_width=0.010):
     """Creates a batch of log-mel spectrograms from a list of paths to .wav files.
 
     Parameters
     ----------
     filepaths : a list of paths to wav files in the dataset.
-    network_mode : Either 'training' or 'validation', representing the
-        partition from which to load files.
     desired_channels : the number of channels of audio data to load from the
         .wav files.
     desired_samples : the number of samples to load from each .wav file.

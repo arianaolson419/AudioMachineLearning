@@ -59,15 +59,15 @@ filenames = tf.placeholder(tf.string, [batch_size])
 labels = tf.placeholder(tf.int32, [batch_size])
 
 # Define the cnn-one-fpool13 network
-input_spectrograms = cnn_helpers.load_and_process_batch(filepaths, network_mode=
-input_layer = tf.expand_dims(input_spectrograms, 3)
-
+input_layer = tf.expand_dims(cnn_helpers.load_and_process_batch(filenames), 3)
+print(input_layer.shape)
 conv1 = tf.layers.conv2d(
         inputs=input_layer, 
         filters=num_conv_feature_maps,
         kernel_size=[pooling_height, pooling_width],
         strides=[stride_height, stride_width],
         padding="same")
+
 max_pool1 = tf.layers.max_pooling2d(
         inputs=conv1,
         pool_size=[pooling_height, pooling_width],
@@ -111,17 +111,32 @@ opt = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
 
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
-    num_batches = 10
-    training_iterations = 10
-    validation_size = 50
+    #num_batches = int(np.floor(cnn_helpers.count_lines('training.txt') / batch_size))
+    num_batches = 1
+    training_iterations = 1
+    validation_size = 5
     
+    output_file = 'cnn_progress.out'
     train_losses = []
+    acc = 0
+
     for i in range(training_iterations):
-        files, batch_labels, new_position = cnn_helpers.get_filenames(batch_size, position, 'training')
-        _, lossval = sess.run((opt, loss), feed_dict={filenames: files, labels: batch_labels})
-        position = new_pos
+        train_pos = 0
+        test_pos = 0
+        print('training iteration: {}'.format(i))
+        for j in tqdm(range(num_batches)):
+            files, batch_labels, new_position = cnn_helpers.get_filenames(batch_size, train_pos, 'training')
+            _, lossval = sess.run((opt, loss), feed_dict={filenames: files, labels: batch_labels})
+            train_pos = new_position
 
-        if i % 10 == train_losses.append(lossval)
+            if j % 10 == 0:
+                with open(output_file, 'a') as f:
+                    f.write('lossval: {}, training iteration: {}'.format(lossval, i))
 
-    for i in range(validation_size):
-        files, batch_labels, new_position = cnn_helpers.get_filenames(batch_size, position, 'validation')
+        for _ in tqdm(range(validation_size)):
+            files, batch_labels, new_position = cnn_helpers.get_filenames(batch_size, test_pos, 'validation')
+            lbl = sess.run(tf.argmax(output_layer, axis=1), feed_dict={filenames: files})
+            acc += np.sum(lbl == batch_labels)
+        print('accuracy: {}'.format(acc / (batch_size * validation_size)))
+    plt.plot(train_losses)
+    plt.show()

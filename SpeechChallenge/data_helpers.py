@@ -48,7 +48,7 @@ def choose_set(filename, validation_percentage=10):
     else:
         return 'training'
 
-def partition_data_set(overwrite=False):
+def partition_dataset(validation_percentage, overwrite=False):
     """Writes the names of all of the files in the dataset to either
     'training.txt' or 'validation.txt'.
 
@@ -73,7 +73,7 @@ def partition_data_set(overwrite=False):
         for _, _, clips in os.walk(path):
             for clip in clips:
                 filename = command + '/' + clip
-                partition = choose_set(filename)
+                partition = choose_set(filename, validation_percentage)
                 destination_file = partition + '.txt'
                 with open(destination_file, 'a') as f:
                     f.write(filename + '\n')

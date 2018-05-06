@@ -7,6 +7,7 @@ http://www.isca-speech.org/archive/interspeech_2015/papers/i15_1478.pdf
 import numpy as np
 import tensorflow as tf
 from tensorflow.contrib.framework.python.ops import audio_ops as contrib_audio
+import tensorflow.contrib.signal as contrib_signal
 from tensorflow.python.ops import io_ops
 import random
 

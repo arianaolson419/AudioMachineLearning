@@ -8,7 +8,8 @@ https://www.isca-speech.org/archive/interspeech_2015/papers/i15_1478.pdf
 """
 
 # Helper functions
-import cnn_helpers
+import cnn_helpers as cnn
+import data_helpers as dataset
 
 # Machine learning libraries
 import tensorflow as tf
@@ -19,26 +20,9 @@ import matplotlib.pyplot as plt
 
 from tqdm import tqdm
 
-# Define categories
-# TODO: these are also defined in the helper file. Probably just import from that.
-all_commands = 'yes no up down left right on off srip go zero one two three' + \
-    'four five six seven eight nine bed bird cat dog happy house marvin' + \
-    'sheila tree wow'
-all_commands = all_commands.split()
-legal_commands = 'yes no up down left right on off stop go'.split()
-other_categories = 'unknown silence'.split()
-all_categories = list(legal_commands) + list(other_categories)
-label_dict = {}
-for i in range(len(all_categories)):
-    label_dict[all_categories[i]] = i
-
-# Size of datasets (not including added silence in batches)
-training_examples = cnn_helpers.count_lines('training.txt')
-validation_examples = cnn_helpers.count_lines('validation.txt')
-
 # Shuffle datasets while debugging network to get fresh examples (Not using all data for debugging)
-cnn_helpers.shuffle_partitioned_files('training.txt')
-cnn_helpers.shuffle_partitioned_files('validation.txt')
+dataset.shuffle_partitioned_files('training.txt')
+dataset.shuffle_partitioned_files('validation.txt')
 
 # Training parameters
 batch_size = 100
@@ -59,7 +43,7 @@ filenames = tf.placeholder(tf.string, [batch_size])
 labels = tf.placeholder(tf.int32, [batch_size])
 
 # Define the cnn-one-fpool13 network
-input_layer = tf.expand_dims(cnn_helpers.load_and_process_batch(filenames), 3)
+input_layer = tf.expand_dims(cnn.load_and_process_batch(filenames), 3)
 print(input_layer.shape)
 conv1 = tf.layers.conv2d(
         inputs=input_layer, 
@@ -99,7 +83,7 @@ dense_layer2 = tf.layers.dense(
 
 output_layer = tf.layers.dense(
         inputs=dense_layer2,
-        units=len(all_categories),
+        units=len(dataset.all_categories),
         activation=tf.nn.softmax,
         kernel_initializer=he(),
         bias_initializer=he())
@@ -111,7 +95,11 @@ opt = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
 
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
-    #num_batches = int(np.floor(cnn_helpers.count_lines('training.txt') / batch_size))
+
+    # Size of datasets (not including added silence in batches)
+    training_examples = dataset.count_lines('training.txt')
+    validation_examples = dataset.count_lines('validation.txt')
+
     num_batches = 1
     training_iterations = 1
     validation_size = 5
@@ -125,7 +113,7 @@ with tf.Session() as sess:
         test_pos = 0
         print('training iteration: {}'.format(i))
         for j in tqdm(range(num_batches)):
-            files, batch_labels, new_position = cnn_helpers.get_filenames(batch_size, train_pos, 'training')
+            files, batch_labels, new_position = dataset.get_filenames(batch_size, train_pos, 'training')
             _, lossval = sess.run((opt, loss), feed_dict={filenames: files, labels: batch_labels})
             train_pos = new_position
 
@@ -134,7 +122,7 @@ with tf.Session() as sess:
                     f.write('lossval: {}, training iteration: {}'.format(lossval, i))
 
         for _ in tqdm(range(validation_size)):
-            files, batch_labels, new_position = cnn_helpers.get_filenames(batch_size, test_pos, 'validation')
+            files, batch_labels, new_position = dataset.get_filenames(batch_size, test_pos, 'validation')
             lbl = sess.run(tf.argmax(output_layer, axis=1), feed_dict={filenames: files})
             acc += np.sum(lbl == batch_labels)
         print('accuracy: {}'.format(acc / (batch_size * validation_size)))

@@ -124,7 +124,7 @@ def train():
                 train_pos = new_position
                 if j % 10 == 0:
                     with open(log_dir + '/' + FLAGS.log_file, 'a') as f:
-                        f.write('lossval: {}, training step: {}\n'.format(lossval, i + j))
+                        f.write('lossval: {}, training_step: {}\n'.format(lossval, i + j))
 
 
                 if j % FLAGS.validation_frequency == 0:

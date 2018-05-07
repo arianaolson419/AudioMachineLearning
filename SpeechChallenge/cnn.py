@@ -10,6 +10,7 @@ https://www.isca-speech.org/archive/interspeech_2015/papers/i15_1478.pdf
 # Helper functions
 import cnn_helpers as cnn
 import data_helpers as dataset
+import dataset_ops as ops
 
 # Machine learning libraries
 import tensorflow as tf
@@ -27,6 +28,11 @@ FLAGS = None
 
 def train():
     dataset.partition_dataset(FLAGS.validation_percentage, FLAGS.partition_dataset)
+
+    # Recalculate the training set mean and variance if the data is re-partitioned.
+    if FLAGS.partition_dataset:
+        ops.save_mean_var(FLAGS.mean_var_file)
+
     # Shuffle datasets while debugging network to get fresh examples (Not using all data for debugging)
     dataset.shuffle_partitioned_files('training.txt')
     dataset.shuffle_partitioned_files('validation.txt')
@@ -47,10 +53,12 @@ def train():
     he = tf.contrib.keras.initializers.he_normal
 
     filenames = tf.placeholder(tf.string, [batch_size])
+    mean = tf.placeholder(tf.float32, [None])
+    var = tf.placeholder(tf.float32, [None])
     labels = tf.placeholder(tf.int32, [batch_size])
 
     # Define the cnn-one-fpool13 network
-    input_layer = tf.expand_dims(cnn.load_and_process_batch(filenames), 3)
+    input_layer = tf.expand_dims(cnn.load_and_process_batch(filenames, mean, var), 3)
     conv1 = tf.layers.conv2d(
             inputs=input_layer, 
             filters=num_conv_feature_maps,
@@ -110,9 +118,11 @@ def train():
         training_iterations = FLAGS.training_iterations
         validation_steps = FLAGS.validation_steps
         
+        mean_var = np.load(FLAGS.mean_var_file)
+        m = mean_var['mean']
+        v = mean_var['var']
+
         log_dir = FLAGS.log_dir
-#        train_losses = []
-#        accuracies = []
 
         for i in range(training_iterations):
             train_pos = 0
@@ -120,7 +130,7 @@ def train():
             print('training iteration: {}'.format(i))
             for j in tqdm(range(training_steps)):
                 files, batch_labels, new_position = dataset.get_filenames(batch_size, train_pos, 'training')
-                _, lossval = sess.run((opt, loss), feed_dict={filenames: files, labels: batch_labels})
+                _, lossval = sess.run((opt, loss), feed_dict={filenames: files, mean: m, var: v, labels: batch_labels})
                 train_pos = new_position
                 if j % 10 == 0:
                     with open(log_dir + '/' + FLAGS.log_file, 'a') as f:
@@ -131,7 +141,7 @@ def train():
                     acc = 0
                     for _ in tqdm(range(validation_steps)):
                         files, batch_labels, new_position = dataset.get_filenames(batch_size, test_pos, 'validation')
-                        lbl = sess.run(tf.argmax(output_layer, axis=1), feed_dict={filenames: files})
+                        lbl = sess.run(tf.argmax(output_layer, axis=1), feed_dict={filenames: files, mean: m, var: v})
                         acc += np.sum(lbl == batch_labels)
                         acc_percent = 100 * acc / (batch_size * validation_steps)
                         with open(log_dir + '/' + FLAGS.log_file, 'a') as f:
@@ -170,6 +180,8 @@ if __name__ == "__main__":
             + 'Otherwise, the network will use the existing partitions')
     parser.add_argument('--validation_frequency', type=int, default=100,
             help='The number of training steps between validation steps.')
+    parser.add_argument('--mean_var_file', type=str, default='mean_var.npz',
+            help='File containing numpy arrays of the mean and variance of the training set')
 
     FLAGS, unparsed = parser.parse_known_args()
     tf.app.run(main=main, argv=[sys.argv[0]] + unparsed)

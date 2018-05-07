@@ -37,8 +37,10 @@ def train():
 
     # Convolution parameters
     num_conv_feature_maps = 54  # n
-    conv_weights_height = 98# m
-    conv_weights_width = 8
+    conv_weights_height1 = 21# m
+    conv_weights_width1 = 8
+    conv_weights_height2 = 6
+    conv_weights_width2 = 4
     pooling_height = 1  # p
     pooling_width = 3   # q
     stride_height = 1  # s
@@ -54,41 +56,25 @@ def train():
     conv1 = tf.layers.conv2d(
             inputs=input_layer, 
             filters=num_conv_feature_maps,
-            kernel_size=[pooling_height, pooling_width],
+            kernel_size=[conv_weights_height1, conv_weights_width1],
             strides=[stride_height, stride_width],
             padding="same")
 
-    max_pool1 = tf.layers.max_pooling2d(
-            inputs=conv1,
-            pool_size=[pooling_height, pooling_width],
-            strides=[stride_height, stride_width],
+    layer_norm_1 = tf.contrib.layers.layer_norm(conv1)
+
+    conv2 = tf.layers.conv2d(
+            inputs=layer_norm_1,
+            filters=num_conv_feature_maps,
+            kernel_size=[conv_weights_height2, conv_weights_width2],
+            strides=[1, 1],
             padding="same")
 
-    pool1_flat = tf.reshape(max_pool1, [-1, 98 * 40 * num_conv_feature_maps])
+    layer_norm_2 = tf.contrib.layers.layer_norm(conv2)
 
-    linear_layer = tf.layers.dense(
-            inputs=pool1_flat,
-            units=32,
-            activation=tf.nn.relu,
-            kernel_initializer=he(),
-            bias_initializer=he())
-
-    dense_layer1 = tf.layers.dense(
-            inputs=linear_layer,
-            units=128,
-            activation=tf.nn.relu,
-            kernel_initializer=he(),
-            bias_initializer=he())
-
-    dense_layer2 = tf.layers.dense(
-            inputs=dense_layer1,
-            units=128,
-            activation=tf.nn.relu,
-            kernel_initializer=he(),
-            bias_initializer=he())
+    flat_layer = tf.reshape(layer_norm_2, [-1, 98 * 40 * num_conv_feature_maps])
 
     output_layer = tf.layers.dense(
-            inputs=dense_layer2,
+            inputs=flat_layer,
             units=len(dataset.all_categories),
             activation=tf.nn.softmax,
             kernel_initializer=he(),

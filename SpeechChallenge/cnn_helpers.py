@@ -11,68 +11,6 @@ import tensorflow.contrib.signal as contrib_signal
 from tensorflow.python.ops import io_ops
 import random
 
-def add_background_noise(audio, sample_rate, mode='all'):
-    """Add background noise to one second audio clips. It has been shown that
-    adding some additional background noise increases the accuracy of the
-    network. There are four recorded noise clips, and two generated noise
-    clips.
-
-    Parameters
-    ----------
-    audio : the audio clip to add noise to
-    sample_rate : the sample rate of the audio clip
-    mode : the origin of the background noise. Either 'all', 'recorded', or 'generated'
-
-    Returns
-    -------
-    mixed_audio : a one second clip of the audio combined with the background noise.
-    """
-    signal_noise_ratio_db = np.random.randint(-5, 11)  #dB
-    signal_noise_ratio = np.power(10, signal_noise_ratio_db * 0.1)
-    background_sample_rate, background_noise = load_random_background_noise(samples=sample_rate, mode=mode)
-    print(audio.dtype, audio.shape)
-    print(background_noise.dtype, background_noise.shape)
-    mixed_audio = background_noise * signal_noise_ratio + audio
-    # TODO: this adds way too much noise. figure out how to make it work correctly.
-    return mixed_audio
-    
-
-# TODO: make this part of the audio processing workflow. Don't return real values!
-def load_random_background_noise(samples=16000, mode='all'):
-    """Loads a clip of random background noise from the set of available noises.
-
-    Parameters
-    ----------
-    samples : The number of samples of background noise desired. Defaults to
-        1600, or one second of audio at 1600Hz.
-    mode : One of 'generated', 'recorded', or 'all'. If the mode is
-        'generated', the background noise loaded will be from one of the files of
-        computer generated noise. If the mode is 'recorded', the background noise
-        loaded will be from one of the files of recorded noise. If the mode is
-        'all', the background noise can be from any of the available files.
-        Defaults to 'all'.
-
-    Returns
-    -------
-    sample_rate : the sample rate of the audio, in samples per second.
-    background_noise : an audio clip of one of the randomly chosen background noise files from the set of options.
-    """
-    base_path = '_background_noise_/'
-    recorded_noise_files = ['doing_the_dishes.wav', 'dude_miaowing.wav', 'exercise_bike.wav', 'running_tap.wav']
-    generated_noise_files = ['pink_noise.wav', 'white_noise.wav']
-    all_noise_files = list(recorded_noise_files + generated_noise_files)
-
-    if mode == 'all':
-        noise_file = random.choice(all_noise_files)
-    elif mode == 'recorded':
-        noise_file = random.choice(recorded_noise_files)
-    elif mode == 'generated':
-        noise_file = random.choice(generated_noise_files)
-
-    sample_rate, full_noise, _ = load_audio_clip(base_path + noise_file)
-    start_index = np.random.randint(0, full_noise.shape[0] - samples)
-    return sample_rate, np.squeeze(full_noise[start_index:start_index + samples])
-
 def load_wav(filepath, desired_channels=1, desired_samples=16000):
     """Defines the piece of the computational graph that loads an audio file.
 
@@ -96,6 +34,29 @@ def load_wav(filepath, desired_channels=1, desired_samples=16000):
             desired_samples=desired_samples)
     audio = wav_decoder.audio
     return audio
+
+def load_background_noise(noise_filepath, desired_channels=1):
+    """Loads all samples in a given background noise file.
+    """
+    wav_loader = io_ops.read_file(noise_filepath)
+    wav_decoder = contrib_audio.decode_wav(
+            wav_loader,
+            desired_channels=desired_channels)
+    background_noise = wav_decoder.audio
+    return background_noise
+
+def get_noise_slice(background_noise, slice_size):
+    max_index = tf.shape(background_noise)[0] - slice_size
+    start_index = tf.random_uniform([1], 0, max_index, tf.int32)[0]
+
+    noise_slice = background_noise[start_index: start_index + slice_size, :]
+
+    return noise_slice
+    
+def add_background_noise(audio, noise_slice, background_volume_range):
+    background_volume = tf.random_uniform([], 0, background_volume_range, tf.float32)
+    noise_volume_adjusted = tf.multiply(background_volume, noise_slice)
+    return tf.add(audio, noise_slice)
 
 def compute_logmel_spectrograms(audio, sample_rate, frame_length_seconds, frame_step_seconds):
     """Computes the log-mel spectrograms of a batch of audio clips

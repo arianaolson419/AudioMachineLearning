@@ -162,7 +162,7 @@ if __name__ == "__main__":
             + 'remaining data is partitioned into the training set.')
     parser.add_argument('--training_iterations', type=int, default=10,
             help='The number of iterations through the data during training')
-    parser.add_argument('--training_steps', type=int, default=1000,
+    parser.add_argument('--training_steps', type=int, default=400,
             help='The number of steps per training iteration. Each step'
             + 'processes one batch of data')
     parser.add_argument('--validation_steps', type=int, default=1,

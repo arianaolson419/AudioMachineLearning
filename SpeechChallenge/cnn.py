@@ -124,18 +124,18 @@ def train():
                 train_pos = new_position
                 if j % 10 == 0:
                     with open(log_dir + '/' + FLAGS.log_file, 'a') as f:
-                        f.write('lossval: {}, training_step: {}\n'.format(lossval, i + j))
+                        f.write('lossval: {}, training_step: {}\n'.format(lossval, i * training_steps + j))
 
 
-                if j % FLAGS.validation_frequency == 0:
+                if j % FLAGS.validation_frequency == FLAGS.validation_frequency - 1:
                     acc = 0
                     for _ in tqdm(range(validation_steps)):
                         files, batch_labels, new_position = dataset.get_filenames(batch_size, test_pos, 'validation')
                         lbl = sess.run(tf.argmax(output_layer, axis=1), feed_dict={filenames: files})
                         acc += np.sum(lbl == batch_labels)
-                        acc_percent = acc / (batch_size * validation_steps)
+                        acc_percent = 100 * acc / (batch_size * validation_steps)
                         with open(log_dir + '/' + FLAGS.log_file, 'a') as f:
-                            f.write('accuracy: {}, training_step: {}\n'.format(acc_percent, i + j))
+                            f.write('accuracy: {}, training_step: {}\n'.format(acc_percent, i * training_steps + j))
 
 def main(_):
     if tf.gfile.Exists(FLAGS.log_dir):

@@ -2,6 +2,7 @@
 """
 
 import random
+import math
 
 # Hashing libraries
 import re
@@ -10,7 +11,7 @@ import hashlib
 import sys
 
 # Define categories
-all_commands = 'yes no up down left right on off srip go zero one two three' + \
+all_commands = 'yes no up down left right on off stop go zero one two three' + \
     'four five six seven eight nine bed bird cat dog happy house marvin' + \
     'sheila tree wow'
 all_commands = all_commands.split()
@@ -58,27 +59,27 @@ def partition_dataset(validation_percentage, overwrite=False):
         files. Defaults to False.
     """
     base = 'train/audio/'
-    if os.path.exists('training.txt'):
-        if overwrite:
-            os.remove('training.txt')
-        else:
+    files = ['training.txt', 'training_unknown.txt', 'validation.txt', 'validation_unknown.txt']
+    for f in files:
+        if os.path.isfile(f) and overwrite:
+            os.remove(f)
+        elif os.path.isfile(f) and not overwrite:
             return
-    if os.path.exists('validation.txt'):
-        if overwrite:
-            os.remove('validation.txt')
-        else:
-            return
+
     for command in all_commands:
         path = base + command
         for _, _, clips in os.walk(path):
             for clip in clips:
                 filename = command + '/' + clip
                 partition = choose_set(filename, validation_percentage)
-                destination_file = partition + '.txt'
+                if command in legal_commands:
+                    destination_file = partition + '.txt'
+                else:
+                    destination_file = partition + '_unknown.txt'
                 with open(destination_file, 'a') as f:
                     f.write(filename + '\n')
-    shuffle_partitioned_files('training.txt')
-    shuffle_partitioned_files('validation.txt')
+    for f in files:
+        shuffle_partitioned_files(f)
 
 def shuffle_partitioned_files(partition):
     """'training.txt' and 'validation.txt' are written to in order, so they
@@ -115,7 +116,7 @@ def count_lines(filename):
             line_count += 1
     return line_count
 
-def get_filenames(batch_size, file_pointer=0, mode='training'):
+def get_filenames(batch_size, file_pointer=0, file_pointer_unknown=0, mode='training'):
     """Gets a list of paths to files in one of the partitioned dataset text files,
     training.txt or validation.txt.
 
@@ -124,6 +125,8 @@ def get_filenames(batch_size, file_pointer=0, mode='training'):
     batch_size : the number of audio clips to return. Will return as many as
         possible if there are fewer than batch_size clips left in the file.
     file_pointer : the location in the file in which to start reading lines.
+    file_pointer_unknown : the location in the file of commands categorized
+        'unknown' in which to start reading lines.
     mode : a string, either 'training' or 'validation'. This determines which
         partitioned dataset the audio clips will be read from. Defaults to
         'training'.
@@ -133,18 +136,42 @@ def get_filenames(batch_size, file_pointer=0, mode='training'):
     filepaths, labels, new_position
     filepaths : a list of paths to files from the desired training set
     new_position : the number of bytes into the partitoned dataset file where the functon stopped reading.
+    new_position_unknown : the number of bytes into the dataset file with the
+        'unknown' commands where the function stopped reading.
     """
+
+    num_unknown = math.floor(batch_size * 1 / len(all_categories))
+    num_silence = math.floor(batch_size * 1 / len(all_categories))
+    num_commands = batch_size - num_unknown - num_silence
+
+    base = 'train/audio/'
     with open(mode + '.txt') as f:
-        base = 'train/audio/'
         f.seek(file_pointer)
         filepaths = []
-        for _ in range(batch_size):
+        for _ in range(num_commands):
+            if os.path.getsize(mode + '.txt') < f.tell():
+                f.seek(0)
             filepaths.append(base + f.readline().strip('\n'))
         new_position = f.tell()
-    label_strings = [path.split('/')[2] for path in filepaths]
-    get_labels = lambda x: x.split('/')[2]
-    legal_labels = lambda x: 'unknown' if get_labels(x) not in legal_commands else get_labels(x)
+
+    with open(mode + '_unknown.txt') as f:
+        f.seek(file_pointer_unknown)
+        for _ in range(num_unknown):
+            if os.path.getsize(mode + '_unknown.txt') < f.tell():
+                f.seek(0)
+            filepaths.append(base + f.readline().strip('\n'))
+        new_position_unknown = f.tell()
+    
+    for _ in range(num_silence):
+        filepaths.append(base + '_silence_/silence.wav')
+
+    random.shuffle(filepaths)
+
+    get_labels = lambda x: x.split('/')[2].strip('_')
+    legal_labels = lambda x: 'unknown' if get_labels(x) not in all_categories else get_labels(x)
     labels_to_ints = lambda x: label_dict[legal_labels(x)]
     
     label_ints = list(map(labels_to_ints, filepaths))
-    return filepaths, label_ints, new_position
+
+        
+    return filepaths, label_ints, new_position, new_position_unknown

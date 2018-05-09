@@ -27,6 +27,15 @@ import argparse
 FLAGS = None
 
 def train():
+    if not os.path.exists('train/audio/_silence_/silence.wav'):
+        silence_filename = tf.constant('train/audio/_silence_/silence.wav')
+        silence_sample_rate = tf.constant(16000)
+        silence_data = tf.zeros((sample_rate, 1))
+        wav_saver = cnn.save_wav(silence_filepath, silence_sample_rate, silence_data)
+
+        with tf.Session() as sess:
+            sess.run(wav_saver)
+
     dataset.partition_dataset(FLAGS.validation_percentage, FLAGS.partition_dataset)
 
     # Recalculate the training set mean and variance if the data is re-partitioned.
@@ -43,8 +52,10 @@ def train():
 
     # Convolution parameters
     num_conv_feature_maps = 54  # n
-    conv_weights_height = 98# m
-    conv_weights_width = 8
+    conv_weights_height1 = 21# m
+    conv_weights_width1 = 8
+    conv_weights_height2 = 6
+    conv_weights_width2 = 4
     pooling_height = 1  # p
     pooling_width = 3   # q
     stride_height = 1  # s
@@ -62,41 +73,25 @@ def train():
     conv1 = tf.layers.conv2d(
             inputs=input_layer, 
             filters=num_conv_feature_maps,
-            kernel_size=[pooling_height, pooling_width],
+            kernel_size=[conv_weights_height1, conv_weights_width1],
             strides=[stride_height, stride_width],
             padding="same")
 
-    max_pool1 = tf.layers.max_pooling2d(
-            inputs=conv1,
-            pool_size=[pooling_height, pooling_width],
-            strides=[stride_height, stride_width],
+    layer_norm_1 = tf.contrib.layers.layer_norm(conv1)
+
+    conv2 = tf.layers.conv2d(
+            inputs=layer_norm_1,
+            filters=num_conv_feature_maps,
+            kernel_size=[conv_weights_height2, conv_weights_width2],
+            strides=[1, 1],
             padding="same")
 
-    pool1_flat = tf.reshape(max_pool1, [-1, 98 * 40 * num_conv_feature_maps])
+    layer_norm_2 = tf.contrib.layers.layer_norm(conv2)
 
-    linear_layer = tf.layers.dense(
-            inputs=pool1_flat,
-            units=32,
-            activation=tf.nn.relu,
-            kernel_initializer=he(),
-            bias_initializer=he())
-
-    dense_layer1 = tf.layers.dense(
-            inputs=linear_layer,
-            units=128,
-            activation=tf.nn.relu,
-            kernel_initializer=he(),
-            bias_initializer=he())
-
-    dense_layer2 = tf.layers.dense(
-            inputs=dense_layer1,
-            units=128,
-            activation=tf.nn.relu,
-            kernel_initializer=he(),
-            bias_initializer=he())
+    flat_layer = tf.reshape(layer_norm_2, [-1, 98 * 40 * num_conv_feature_maps])
 
     output_layer = tf.layers.dense(
-            inputs=dense_layer2,
+            inputs=flat_layer,
             units=len(dataset.all_categories),
             activation=tf.nn.softmax,
             kernel_initializer=he(),
@@ -126,12 +121,21 @@ def train():
 
         for i in range(training_iterations):
             train_pos = 0
+            train_pos_unknown = 0
             test_pos = 0
+            test_pos_unknown = 0
             print('training iteration: {}'.format(i))
+            dataset.shuffle_partitioned_files('training.txt')
+            dataset.shuffle_partitioned_files('training_unknown.txt')
             for j in tqdm(range(training_steps)):
-                files, batch_labels, new_position = dataset.get_filenames(batch_size, train_pos, 'training')
+                files, batch_labels, new_position, new_position_unknown = dataset.get_filenames(
+                        batch_size,
+                        train_pos,
+                        train_pos_unknown,
+                        'training')
                 _, lossval = sess.run((opt, loss), feed_dict={filenames: files, mean: m, var: v, labels: batch_labels})
                 train_pos = new_position
+                train_pos_unknown = new_position_unknown
                 if j % 10 == 0:
                     with open(log_dir + '/' + FLAGS.log_file, 'a') as f:
                         f.write('lossval: {}, training_step: {}\n'.format(lossval, i * training_steps + j))
@@ -139,8 +143,16 @@ def train():
 
                 if j % FLAGS.validation_frequency == FLAGS.validation_frequency - 1:
                     acc = 0
+                    dataset.shuffle_partitioned_files('validation.txt')
+                    dataset.shuffle_partitioned_files('validation_unknown.txt')
                     for _ in tqdm(range(validation_steps)):
-                        files, batch_labels, new_position = dataset.get_filenames(batch_size, test_pos, 'validation')
+                        files, batch_labels, new_position, new_position_unknown = dataset.get_filenames(
+                                batch_size,
+                                test_pos,
+                                test_pos_unknown,
+                                'validation')
+                        test_pos = new_position
+                        test_pos_unknown = new_position_unknown
                         lbl = sess.run(tf.argmax(output_layer, axis=1), feed_dict={filenames: files, mean: m, var: v})
                         acc += np.sum(lbl == batch_labels)
                         acc_percent = 100 * acc / (batch_size * validation_steps)

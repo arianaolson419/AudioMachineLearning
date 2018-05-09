@@ -73,6 +73,26 @@ def load_random_background_noise(samples=16000, mode='all'):
     start_index = np.random.randint(0, full_noise.shape[0] - samples)
     return sample_rate, np.squeeze(full_noise[start_index:start_index + samples])
 
+def save_wav(filepath, wav_data, sample_rate=16000):
+    """Defines a computational graph that saves an array of floats to a .wav file
+    
+    Parameters
+    ----------
+    filepath : a tensor of dtype tf.string and shape (1,) representing the path
+        of the saved wav file.
+    wav_data : a tensor of dtype tf.float32 and shape (None, 1) representing
+        the data to be encoded as a .wav file.
+    sample_rate : a tensor of type tf.int32 and shape (1,) representing the
+        desired sample rate at which to encode the data.
+
+    Returns
+    -------
+    wav_saver : a tensorflow operation that writes the encoded data to a file.
+    """
+    wav_encoder = contrib_audio.encode_wav(data, sample_rate)
+    wav_saver = io_ops.write_file(filename, wav_encoder)
+    return wav_saver
+
 def load_wav(filepath, desired_channels=1, desired_samples=16000):
     """Defines the piece of the computational graph that loads an audio file.
 

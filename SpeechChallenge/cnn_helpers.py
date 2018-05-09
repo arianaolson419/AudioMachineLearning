@@ -89,8 +89,8 @@ def save_wav(filepath, wav_data, sample_rate=16000):
     -------
     wav_saver : a tensorflow operation that writes the encoded data to a file.
     """
-    wav_encoder = contrib_audio.encode_wav(data, sample_rate)
-    wav_saver = io_ops.write_file(filename, wav_encoder)
+    wav_encoder = contrib_audio.encode_wav(wav_data, sample_rate)
+    wav_saver = io_ops.write_file(filepath, wav_encoder)
     return wav_saver
 
 def load_wav(filepath, desired_channels=1, desired_samples=16000):

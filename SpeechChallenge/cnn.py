@@ -29,8 +29,8 @@ def train():
     if not os.path.exists('train/audio/_silence_/silence.wav'):
         silence_filename = tf.constant('train/audio/_silence_/silence.wav')
         silence_sample_rate = tf.constant(16000)
-        silence_data = tf.zeros((sample_rate, 1))
-        wav_saver = cnn.save_wav(silence_filepath, silence_sample_rate, silence_data)
+        silence_data = tf.zeros((silence_sample_rate, 1), dtype=tf.float32)
+        wav_saver = cnn.save_wav(silence_filename, silence_data, silence_sample_rate)
 
         with tf.Session() as sess:
             sess.run(wav_saver)

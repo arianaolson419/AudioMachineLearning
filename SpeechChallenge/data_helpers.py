@@ -140,9 +140,9 @@ def get_filenames(batch_size, file_pointer=0, file_pointer_unknown=0, mode='trai
         'unknown' commands where the function stopped reading.
     """
 
-    num_unknown = math.floor(batch_size * 1 / len(all_categories))
-    num_silence = math.floor(batch_size * 1 / len(all_categories))
-    num_commands = batch_size - num_unknown - num_silence
+    num_unknown = int(math.floor(batch_size * 1 / len(all_categories)))
+    num_silence = int(math.floor(batch_size * 1 / len(all_categories)))
+    num_commands = int(batch_size - num_unknown - num_silence)
 
     base = 'train/audio/'
     with open(mode + '.txt') as f:

@@ -113,6 +113,8 @@ def train():
             test_pos = 0
             test_pos_unknown = 0
             print('training iteration: {}'.format(i))
+            dataset.shuffle_partitioned_files('training.txt')
+            dataset.shuffle_partitioned_files('training_unknown.txt')
             for j in tqdm(range(training_steps)):
                 files, batch_labels, new_position, new_position_unknown = dataset.get_filenames(
                         batch_size,
@@ -129,6 +131,8 @@ def train():
 
                 if j % FLAGS.validation_frequency == FLAGS.validation_frequency - 1:
                     acc = 0
+                    dataset.shuffle_partitioned_files('validation.txt')
+                    dataset.shuffle_partitioned_files('validation_unknown.txt')
                     for _ in tqdm(range(validation_steps)):
                         files, batch_labels, new_position, new_position_unknown = dataset.get_filenames(
                                 batch_size,

@@ -117,6 +117,12 @@ def load_wav(filepath, desired_channels=1, desired_samples=16000):
     audio = wav_decoder.audio
     return audio
 
+def standardize_batch(audio, mean, var):
+    """Calculate the z-scores of the audio samples to normalize each batch.
+    """
+    standardized_audio = tf.nn.batch_normalization(audio, mean, var, None, None, 1e-6)
+    return standardized_audio
+
 def compute_logmel_spectrograms(audio, sample_rate, frame_length_seconds, frame_step_seconds):
     """Computes the log-mel spectrograms of a batch of audio clips
 
@@ -158,11 +164,8 @@ def compute_logmel_spectrograms(audio, sample_rate, frame_length_seconds, frame_
     log_mel_spectrograms = tf.log(mel_spectrograms + log_offset)
 
     return log_mel_spectrograms
-   # with tf.Session() as sess:
-   #     spectrogram_batch = sess.run(log_mel_spectrograms, feed_dict={signals: audio})
-   # return spectrogram_batch       
 
-def load_and_process_batch(filepaths, desired_channels=1, desired_samples=16000, frame_length=0.025, frame_width=0.010):
+def load_and_process_batch(filepaths, mean, var, desired_channels=1, desired_samples=16000, frame_length=0.025, frame_width=0.010):
     """Creates a batch of log-mel spectrograms from a list of paths to .wav files.
 
     Parameters
@@ -179,8 +182,9 @@ def load_and_process_batch(filepaths, desired_channels=1, desired_samples=16000,
     A tensor of dtype tf.float32 and shape (batch_size, time_bins, mel_bins)
     """
     audio_signals = tf.squeeze(tf.map_fn(load_wav, filepaths, tf.float32))
+    standardized_audio = standardize_batch(audio_signals, mean, var)
     spectrograms = compute_logmel_spectrograms(
-            audio_signals,
+            standardized_audio,
             sample_rate=desired_samples,
             frame_length_seconds=frame_length,
             frame_step_seconds=frame_width)

@@ -135,6 +135,7 @@ def get_filenames(batch_size, file_pointer=0, file_pointer_unknown=0, mode='trai
     -------
     filepaths, labels, new_position
     filepaths : a list of paths to files from the desired training set
+    label_ints : a list of labels coded as integers from label_dict
     new_position : the number of bytes into the partitoned dataset file where the functon stopped reading.
     new_position_unknown : the number of bytes into the dataset file with the
         'unknown' commands where the function stopped reading.
@@ -173,5 +174,4 @@ def get_filenames(batch_size, file_pointer=0, file_pointer_unknown=0, mode='trai
     
     label_ints = list(map(labels_to_ints, filepaths))
 
-        
     return filepaths, label_ints, new_position, new_position_unknown

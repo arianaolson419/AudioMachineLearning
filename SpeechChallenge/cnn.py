@@ -30,6 +30,14 @@ config = tf.ConfigProto(
         device_count = {'GPU': 0}
         )
 
+def check_is_file(filenames, labels):
+    check = lambda x : os.path.isfile(x)
+    for i, f in enumerate(filenames):
+        if not check(f):
+            print('{} is not file.'.format(f))
+            filenames[i] = 'train/audio/_silence_/silence.wav'
+            labels[i] = dataset.label_dict['silence']
+
 def train():
     if not os.path.exists('train/audio/_silence_/silence.wav'):
         silence_filename = tf.constant('train/audio/_silence_/silence.wav')
@@ -85,14 +93,14 @@ def train():
 
     conv2 = tf.layers.conv2d(
             inputs=layer_norm_1,
-            filters=num_conv_feature_maps,
+            filters=108,
             kernel_size=[conv_weights_height2, conv_weights_width2],
             strides=[1, 1],
             padding="same")
 
     layer_norm_2 = tf.contrib.layers.layer_norm(conv2)
 
-    flat_layer = tf.reshape(layer_norm_2, [-1, 98 * 40 * num_conv_feature_maps])
+    flat_layer = tf.reshape(layer_norm_2, [-1, 98 * 40 * 108])
 
     output_layer = tf.layers.dense(
             inputs=flat_layer,
@@ -102,8 +110,11 @@ def train():
             bias_initializer=he())
 
     labels = tf.placeholder(shape=(batch_size), dtype=tf.int32)
-    loss = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(
-        logits=output_layer, labels=labels))
+    onehot_labels = tf.one_hot(labels, len(dataset.all_categories))
+    print(labels.shape, output_layer.shape)
+    loss = tf.losses.softmax_cross_entropy(onehot_labels=onehot_labels, logits=output_layer)
+    #loss = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(
+    #    logits=output_layer, labels=labels))
     opt = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
 
     with tf.Session(config=config) as sess:
@@ -137,9 +148,10 @@ def train():
                         train_pos,
                         train_pos_unknown,
                         'training')
+                check_is_file(files, batch_labels)
                 _, lossval = sess.run((opt, loss), feed_dict={filenames: files, mean: m, var: v, labels: batch_labels})
                 train_pos = new_position
-                train_pos_unknown = new_position_unknown
+                #train_pos_unknown = new_position_unknown
                 if j % 10 == 0:
                     with open(log_dir + '/' + FLAGS.log_file, 'a') as f:
                         f.write('lossval: {}, training_step: {}\n'.format(lossval, i * training_steps + j))
@@ -155,13 +167,15 @@ def train():
                                 test_pos,
                                 test_pos_unknown,
                                 'validation')
+                        check_is_file(files, batch_labels)
                         test_pos = new_position
-                        test_pos_unknown = new_position_unknown
-                        lbl = sess.run(tf.argmax(output_layer, axis=1), feed_dict={filenames: files, mean: m, var: v})
+                        print(files)
+                        #test_pos_unknown = new_position_unknown
+                        lbl, aloss = sess.run((tf.argmax(output_layer, axis=1), loss), feed_dict={filenames: files, mean: m, var: v, labels: batch_labels})
                         acc += np.sum(lbl == batch_labels)
                         acc_percent = 100 * acc / (batch_size * validation_steps)
                         with open(log_dir + '/' + FLAGS.log_file, 'a') as f:
-                            f.write('accuracy: {}, training_step: {}\n'.format(acc_percent, i * training_steps + j))
+                            f.write('accuracy: {}, training_step: {}\n'.format(aloss, i * training_steps + j))
 
 def main(_):
     if tf.gfile.Exists(FLAGS.log_dir):

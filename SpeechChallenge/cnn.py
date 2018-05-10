@@ -26,6 +26,10 @@ import argparse
 
 FLAGS = None
 
+config = tf.ConfigProto(
+        device_count = {'GPU': 0}
+        )
+
 def train():
     if not os.path.exists('train/audio/_silence_/silence.wav'):
         silence_filename = tf.constant('train/audio/_silence_/silence.wav')
@@ -102,7 +106,7 @@ def train():
         logits=output_layer, labels=labels))
     opt = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
 
-    with tf.Session() as sess:
+    with tf.Session(config=config) as sess:
         sess.run(tf.global_variables_initializer())
 
         # Size of datasets (not including added silence in batches)

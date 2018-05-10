@@ -16,7 +16,7 @@ def calc_mean_var():
     all_audio = tf.squeeze(tf.map_fn(cnn.load_wav, files, tf.float32))
     mean, var = tf.nn.moments(all_audio, axes=0)
     
-    filenames, _, _ = dataset.get_filenames(num_samples)
+    filenames, _, _, _ = dataset.get_filenames(num_samples)
     with tf.Session() as sess:
         m, v = sess.run((mean, var), {files: filenames})
         return m, v

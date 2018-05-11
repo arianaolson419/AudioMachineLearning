@@ -68,16 +68,6 @@ def train():
         with tf.Session() as sess:
             sess.run(wav_saver)
 
-    dataset.partition_dataset(FLAGS.validation_percentage, FLAGS.partition_dataset)
-
-    # Recalculate the training set mean and variance if the data is re-partitioned.
-    if FLAGS.partition_dataset:
-        ops.save_mean_var(FLAGS.mean_var_file)
-
-    # Shuffle datasets while debugging network to get fresh examples (Not using all data for debugging)
-    dataset.shuffle_partitioned_files('training.txt')
-    dataset.shuffle_partitioned_files('validation.txt')
-
     # Training parameters
     batch_size = FLAGS.batch_size
     learning_rate = FLAGS.learning_rate
@@ -137,19 +127,12 @@ def train():
 
     conv5 = tf.layers.conv2d(
             inputs=layer_4_norm,
-            filters=1024,
+            filters=12,
             kernel_size=[2, 2],
             strides=[2, 2],
-            activation=tf.nn.leaky_relu,
             padding="same")
 
-    flat_layer = tf.layers.flatten(conv5)
-    output_layer = tf.layers.dense(
-            flat_layer,
-            12,
-            activation=None,
-            kernel_initializer=he(),
-            bias_initializer=he())
+    output_layer = tf.layers.flatten(conv5)
     print(output_layer.shape)
 
     loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels, logits=output_layer))
@@ -170,7 +153,7 @@ def train():
         for i in range(training_iterations):
             print('training iteration: {}'.format(i))
             for j in tqdm(range(training_steps)):
-                pred, lbl, lossval = sess.run((prediction, labels, loss))
+                _, pred, lbl, lossval = sess.run((opt, prediction, labels, loss))
                 t_acc = np.sum(pred == lbl)
                 acc_percent = 100 * t_acc  / (batch_size)
 

@@ -38,6 +38,30 @@ def check_is_file(filenames, labels):
             filenames[i] = 'train/audio/_silence_/silence.wav'
             labels[i] = dataset.label_dict['silence']
 
+def make_labelled_batch(categories, index_sequence):
+    """
+    Given 'categories', a list of tensors of possibly non-uniform size, and 'index_sequence', 
+    a sequence of indices into the 'categories' list, returns a tensor whose ith element is a 
+    value randomly selected from the tensor at 'categories[index_sequence[i]]'.
+    """
+    assert len(index_sequence.shape) == 1
+    tensors = tf.TensorArray(
+        dtype = tf.string,
+        size = len(categories),
+        dynamic_size = False,
+        clear_after_read = False,
+        infer_shape = False,
+    )
+    for i, filename_tensor in enumerate(categories):
+        tensors = tensors.write(i, filename_tensor)
+    def get_file_name_at(idx):
+        category = tensors.read(idx)
+        return category[tf.random_uniform([], 0, tf.shape(category)[0], dtype=tf.int32)]
+    mapped = tf.map_fn(get_file_name_at, index_sequence, dtype=tf.string)
+    if index_sequence.shape[0] is not None:
+        mapped.set_shape(index_sequence.shape)
+    return mapped
+
 def train():
     if not os.path.exists('train/audio/_silence_/silence.wav'):
         silence_filename = tf.constant('train/audio/_silence_/silence.wav')
@@ -48,134 +72,110 @@ def train():
         with tf.Session() as sess:
             sess.run(wav_saver)
 
-    dataset.partition_dataset(FLAGS.validation_percentage, FLAGS.partition_dataset)
-
-    # Recalculate the training set mean and variance if the data is re-partitioned.
-    if FLAGS.partition_dataset:
-        ops.save_mean_var(FLAGS.mean_var_file)
-
-    # Shuffle datasets while debugging network to get fresh examples (Not using all data for debugging)
-    dataset.shuffle_partitioned_files('training.txt')
-    dataset.shuffle_partitioned_files('validation.txt')
-
     # Training parameters
     batch_size = FLAGS.batch_size
     learning_rate = FLAGS.learning_rate
 
-    # Convolution parameters
-    num_conv_feature_maps = 54  # n
-    conv_weights_height1 = 21# m
-    conv_weights_width1 = 8
-    conv_weights_height2 = 6
-    conv_weights_width2 = 4
-    pooling_height = 1  # p
-    pooling_width = 3   # q
-    stride_height = 1  # s
-    stride_width = 1    # v
-
     he = tf.contrib.keras.initializers.he_normal
 
-    filenames = tf.placeholder(tf.string, [batch_size])
-    mean = tf.placeholder(tf.float32, [None])
-    var = tf.placeholder(tf.float32, [None])
-    labels = tf.placeholder(tf.int32, [batch_size])
+    mean_var = np.load(FLAGS.mean_var_file)
+
+    categories = dataset.make_labelled_data()
+    labels = tf.random_uniform([batch_size], 0, len(categories), dtype=tf.int32)
+    filenames = make_labelled_batch(categories, labels)
+    mean_var = np.load(FLAGS.mean_var_file)
+    mean = tf.constant(mean_var['mean'])
+    var = tf.constant(mean_var['var'])
 
     # Define the cnn-one-fpool13 network
     input_layer = tf.expand_dims(cnn.load_and_process_batch(filenames, mean, var), 3)
     conv1 = tf.layers.conv2d(
             inputs=input_layer, 
-            filters=num_conv_feature_maps,
-            kernel_size=[conv_weights_height1, conv_weights_width1],
-            strides=[stride_height, stride_width],
+            filters=64,
+            kernel_size=[8, 8],
+            strides=[5, 3],
+            activation=tf.nn.leaky_relu,
             padding="same")
 
     layer_norm_1 = tf.contrib.layers.layer_norm(conv1)
 
     conv2 = tf.layers.conv2d(
             inputs=layer_norm_1,
-            filters=108,
-            kernel_size=[conv_weights_height2, conv_weights_width2],
-            strides=[1, 1],
+            filters=128,
+            kernel_size=[8, 6],
+            strides=[3, 2],
+            activation=tf.nn.leaky_relu,
             padding="same")
 
     layer_norm_2 = tf.contrib.layers.layer_norm(conv2)
 
-    flat_layer = tf.reshape(layer_norm_2, [-1, 98 * 40 * 108])
+    conv3 = tf.layers.conv2d(
+            inputs=layer_norm_2,
+            filters=256,
+            kernel_size=[5, 5],
+            strides=[2, 2],
+            activation=tf.nn.leaky_relu,
+            padding="same")
 
-    output_layer = tf.layers.dense(
-            inputs=flat_layer,
-            units=len(dataset.all_categories),
-            activation=tf.nn.softmax,
-            kernel_initializer=he(),
-            bias_initializer=he())
+    layer_norm_3 = tf.contrib.layers.layer_norm(conv3)
+    
+    conv4 = tf.layers.conv2d(
+            inputs=layer_norm_3,
+            filters=512,
+            kernel_size=[2, 2],
+            strides=[2, 2],
+            activation=tf.nn.leaky_relu,
+            padding="same")
 
-    labels = tf.placeholder(shape=(batch_size), dtype=tf.int32)
-    onehot_labels = tf.one_hot(labels, len(dataset.all_categories))
-    print(labels.shape, output_layer.shape)
-    loss = tf.losses.softmax_cross_entropy(onehot_labels=onehot_labels, logits=output_layer)
-    #loss = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(
-    #    logits=output_layer, labels=labels))
+    layer_4_norm = tf.contrib.layers.layer_norm(conv4)
+
+    conv5 = tf.layers.conv2d(
+            inputs=layer_4_norm,
+            filters=12,
+            kernel_size=[2, 2],
+            strides=[2, 2],
+            padding="same")
+
+    output_layer = tf.layers.flatten(conv5)
+    print(output_layer.shape)
+
+    loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels, logits=output_layer))
     opt = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
+    prediction = tf.argmax(output_layer, axis=1)
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth=True
+    sess = tf.Session(config=config)
 
     with tf.Session(config=config) as sess:
         sess.run(tf.global_variables_initializer())
 
-        # Size of datasets (not including added silence in batches)
-        training_examples = dataset.count_lines('training.txt')
-        validation_examples = dataset.count_lines('validation.txt')
-
         training_steps = FLAGS.training_steps
         training_iterations = FLAGS.training_iterations
         validation_steps = FLAGS.validation_steps
-        
-        mean_var = np.load(FLAGS.mean_var_file)
-        m = mean_var['mean']
-        v = mean_var['var']
-
         log_dir = FLAGS.log_dir
 
         for i in range(training_iterations):
-            train_pos = 0
-            train_pos_unknown = 0
-            test_pos = 0
-            test_pos_unknown = 0
             print('training iteration: {}'.format(i))
-            dataset.shuffle_partitioned_files('training.txt')
-            dataset.shuffle_partitioned_files('training_unknown.txt')
             for j in tqdm(range(training_steps)):
-                files, batch_labels, new_position, new_position_unknown = dataset.get_filenames(
-                        batch_size,
-                        train_pos,
-                        train_pos_unknown,
-                        'training')
-                check_is_file(files, batch_labels)
-                _, lossval = sess.run((opt, loss), feed_dict={filenames: files, mean: m, var: v, labels: batch_labels})
-                train_pos = new_position
-                #train_pos_unknown = new_position_unknown
-                if j % 10 == 0:
-                    with open(log_dir + '/' + FLAGS.log_file, 'a') as f:
-                        f.write('lossval: {}, training_step: {}\n'.format(lossval, i * training_steps + j))
+                _, pred, lbl, lossval = sess.run((opt, prediction, labels, loss))
+                t_acc = np.sum(pred == lbl)
+                acc_percent = 100 * t_acc  / (batch_size)
+
+                with open(log_dir + '/' + FLAGS.log_file, 'a') as f:
+                    f.write('train_loss: {}, training_step: {}\n'.format(lossval, i * training_steps + j))
+                    f.write('train_accuracy: {}, training_step: {}\n'.format(acc_percent, i * training_steps + j))
 
 
                 if j % FLAGS.validation_frequency == FLAGS.validation_frequency - 1:
-                    acc = 0
-                    dataset.shuffle_partitioned_files('validation.txt')
-                    dataset.shuffle_partitioned_files('validation_unknown.txt')
-                    for _ in tqdm(range(validation_steps)):
-                        files, batch_labels, new_position, new_position_unknown = dataset.get_filenames(
-                                batch_size,
-                                test_pos,
-                                test_pos_unknown,
-                                'validation')
-                        check_is_file(files, batch_labels)
-                        test_pos = new_position
-                        print(files)
-                        #test_pos_unknown = new_position_unknown
-                        lbl, aloss = sess.run((tf.argmax(output_layer, axis=1), loss), feed_dict={filenames: files, mean: m, var: v, labels: batch_labels})
-                        acc += np.sum(lbl == batch_labels)
-                        acc_percent = 100 * acc / (batch_size * validation_steps)
-                        with open(log_dir + '/' + FLAGS.log_file, 'a') as f:
-                            f.write('accuracy: {}, training_step: {}\n'.format(aloss, i * training_steps + j))
+                    print('accuracy: {}'.format(t_acc))
+#                    v_acc = 0
+#                    for _ in tqdm(range(validation_steps)):
+#                        pred, lbl, lossval = sess.run((prediction, labels, loss))
+#                        v_acc += np.sum(pred == lbl)
+#                        acc_percent = 100 * v_acc / (batch_size * validation_steps)
+#                        with open(log_dir + '/' + FLAGS.log_file, 'a') as f:
+#                            f.write('validation_loss: {}, training_step: {}\n'.format(lossval, i * training_steps + j))
+#                            f.write('accuracy: {}, training_step: {}\n'.format(acc_percent, i * training_steps + j))
 
 def main(_):
     if tf.gfile.Exists(FLAGS.log_dir):

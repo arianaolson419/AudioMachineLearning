@@ -133,7 +133,6 @@ def train():
             padding="same")
 
     output_layer = tf.layers.flatten(conv5)
-    print(output_layer.shape)
 
     loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels, logits=output_layer))
     opt = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)

@@ -3,10 +3,12 @@
 
 import random
 import math
+import pickle
 
 # Hashing libraries
 import re
 import os.path
+import pathlib
 import hashlib
 import sys
 
@@ -48,6 +50,57 @@ def choose_set(filename, validation_percentage=10):
         return 'validation'
     else:
         return 'training'
+
+def make_dataset_dicts(validation_percentage, dest_file):
+    """Partitions the dataset into two dictionaries and pickles them to a destination file.
+    """
+    training_dict = {}
+    validation_dict = {}
+    base = 'train/audio'
+    for k, v in label_dict.items():
+        training_dict[v] = []
+        validation_dict[v] = []
+
+    for command in all_commands:
+        path = base + '/' + command
+        for _, _, clips in os.walk(path):
+            for clip in clips:
+                filename = command + '/' + clip
+                partition = choose_set(filename, validation_percentage)
+                if command in legal_commands:
+                    label = label_dict[command]
+                else:
+                    label = label_dict['unknown']
+                if partition == 'training':
+                    training_dict[label].append(filename)
+                if partition == 'validation':
+                    validation_dict[label].append(filename)
+    with open(dest_file, 'wb') as f:
+        pickle.dump((training_dict, validation_dict), f)
+
+def get_filenames2(batch_size, data_dict):
+    silence_file = 'train/audio/_silence_/silence.wav'
+    silence_label = label_dict['silence']
+    unknown_label = label_dict['unknown']
+    
+    num_other = int(batch_size * 1 / len(all_categories))
+
+    filenames = []
+    labels = []
+
+    for _ in range(batch_size - 2 * num_other):
+        label = label_dict[random.choice(legal_commands)]
+        wav_path = random.choice(data_dict[label])
+        labels.append(label)
+        filenames.append(wav_path)
+    
+    for _ in range(num_other):
+        labels.append(unknown_label)
+        filenames.append(random.choice(data_dict[unknown_label]))
+        labels.append(silence_label)
+        filenames.append(silence_file)
+
+    return filenames
 
 def partition_dataset(validation_percentage, overwrite=False):
     """Writes the names of all of the files in the dataset to either
@@ -175,3 +228,24 @@ def get_filenames(batch_size, file_pointer=0, file_pointer_unknown=0, mode='trai
     label_ints = list(map(labels_to_ints, filepaths))
 
     return filepaths, label_ints, new_position, new_position_unknown
+
+def make_labelled_data():
+    import tensorflow as tf
+    data = [[] for _ in label_dict]
+    legal = frozenset(legal_commands)
+    rootdir = pathlib.Path('train') / 'audio'
+    for d in rootdir.iterdir():
+        if d.name == '_background_noise_':
+            continue
+        label = d.name if d.name != '_silence_' else 'silence'
+        try:
+            dest = data[label_dict[label]]
+        except KeyError:
+            dest = data[label_dict['unknown']]
+        for wavfile in d.iterdir():
+            if wavfile.name[-4:] != '.wav':
+                print("[warning] '{}' is not a wavfile.".format(wavfile), file=sys.stderr)
+                continue
+            dest.append(wavfile)
+    return [tf.constant([str(path) for path in cat], dtype=tf.string) for cat in data]
+

@@ -10,6 +10,7 @@ https://www.isca-speech.org/archive/interspeech_2015/papers/i15_1478.pdf
 # Helper functions
 import cnn_helpers as cnn
 import data_helpers as dataset
+import dataset_ops as ops
 
 # Machine learning libraries
 import tensorflow as tf
@@ -25,114 +26,120 @@ import argparse
 
 FLAGS = None
 
+
 def train():
-    dataset.partition_dataset(FLAGS.validation_percentage, FLAGS.partition_dataset)
-    # Shuffle datasets while debugging network to get fresh examples (Not using all data for debugging)
-    dataset.shuffle_partitioned_files('training.txt')
-    dataset.shuffle_partitioned_files('validation.txt')
+    if not os.path.exists('train/audio/_silence_/silence.wav'):
+        silence_filename = tf.constant('train/audio/_silence_/silence.wav')
+        silence_sample_rate = tf.constant(16000)
+        silence_data = tf.zeros((sample_rate, 1))
+        wav_saver = cnn.save_wav(silence_filepath, silence_sample_rate, silence_data)
+
+        with tf.Session() as sess:
+            sess.run(wav_saver)
 
     # Training parameters
     batch_size = FLAGS.batch_size
     learning_rate = FLAGS.learning_rate
 
-    # Convolution parameters
-    num_conv_feature_maps = 54  # n
-    conv_weights_height = 98# m
-    conv_weights_width = 8
-    pooling_height = 1  # p
-    pooling_width = 3   # q
-    stride_height = 1  # s
-    stride_width = 1    # v
-
     he = tf.contrib.keras.initializers.he_normal
 
-    filenames = tf.placeholder(tf.string, [batch_size])
-    labels = tf.placeholder(tf.int32, [batch_size])
+    training_mode = tf.placeholder(tf.bool, ())
+    train_categories, validation_categories = dataset.make_labelled_data()
+    categories = tf.cond(training_mode, lambda: train_categories, lambda: validation_categories)
+    labels = tf.random_uniform([batch_size], 0, len(categories), dtype=tf.int32)
+    filenames = dataset.make_labelled_batch(categories, labels)
+    mean_var = np.load(FLAGS.mean_var_file)
+    mean = tf.constant(mean_var['mean'])
+    var = tf.constant(mean_var['var'])
+
 
     # Define the cnn-one-fpool13 network
-    input_layer = tf.expand_dims(cnn.load_and_process_batch(filenames), 3)
+    input_layer = tf.expand_dims(cnn.load_and_process_batch(filenames, mean, var), 3)
     conv1 = tf.layers.conv2d(
             inputs=input_layer, 
-            filters=num_conv_feature_maps,
-            kernel_size=[pooling_height, pooling_width],
-            strides=[stride_height, stride_width],
+            filters=64,
+            kernel_size=[8, 8],
+            strides=[5, 3],
+            activation=tf.nn.leaky_relu,
             padding="same")
 
-    max_pool1 = tf.layers.max_pooling2d(
-            inputs=conv1,
-            pool_size=[pooling_height, pooling_width],
-            strides=[stride_height, stride_width],
+    layer_norm_1 = tf.contrib.layers.layer_norm(conv1)
+
+    conv2 = tf.layers.conv2d(
+            inputs=layer_norm_1,
+            filters=128,
+            kernel_size=[8, 6],
+            strides=[3, 2],
+            activation=tf.nn.leaky_relu,
             padding="same")
 
-    pool1_flat = tf.reshape(max_pool1, [-1, 98 * 40 * num_conv_feature_maps])
+    layer_norm_2 = tf.contrib.layers.layer_norm(conv2)
 
-    linear_layer = tf.layers.dense(
-            inputs=pool1_flat,
-            units=32,
-            activation=tf.nn.relu,
-            kernel_initializer=he(),
-            bias_initializer=he())
+    conv3 = tf.layers.conv2d(
+            inputs=layer_norm_2,
+            filters=256,
+            kernel_size=[5, 5],
+            strides=[2, 2],
+            activation=tf.nn.leaky_relu,
+            padding="same")
 
-    dense_layer1 = tf.layers.dense(
-            inputs=linear_layer,
-            units=128,
-            activation=tf.nn.relu,
-            kernel_initializer=he(),
-            bias_initializer=he())
+    layer_norm_3 = tf.contrib.layers.layer_norm(conv3)
+    
+    conv4 = tf.layers.conv2d(
+            inputs=layer_norm_3,
+            filters=512,
+            kernel_size=[2, 2],
+            strides=[2, 2],
+            activation=tf.nn.leaky_relu,
+            padding="same")
 
-    dense_layer2 = tf.layers.dense(
-            inputs=dense_layer1,
-            units=128,
-            activation=tf.nn.relu,
-            kernel_initializer=he(),
-            bias_initializer=he())
+    layer_4_norm = tf.contrib.layers.layer_norm(conv4)
 
-    output_layer = tf.layers.dense(
-            inputs=dense_layer2,
-            units=len(dataset.all_categories),
-            activation=tf.nn.softmax,
-            kernel_initializer=he(),
-            bias_initializer=he())
+    conv5 = tf.layers.conv2d(
+            inputs=layer_4_norm,
+            filters=12,
+            kernel_size=[2, 2],
+            strides=[2, 2],
+            padding="same")
 
-    labels = tf.placeholder(shape=(batch_size), dtype=tf.int32)
-    loss = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(
-        logits=output_layer, labels=labels))
+    output_layer = tf.layers.flatten(conv5)
+
+    loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels, logits=output_layer))
     opt = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
+    prediction = tf.argmax(output_layer, axis=1)
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth=True
+    sess = tf.Session(config=config)
 
-    with tf.Session() as sess:
+    with tf.Session(config=config) as sess:
         sess.run(tf.global_variables_initializer())
-
-        # Size of datasets (not including added silence in batches)
-        training_examples = dataset.count_lines('training.txt')
-        validation_examples = dataset.count_lines('validation.txt')
 
         training_steps = FLAGS.training_steps
         training_iterations = FLAGS.training_iterations
         validation_steps = FLAGS.validation_steps
-        
         log_dir = FLAGS.log_dir
 
         for i in range(training_iterations):
-            train_pos = 0
-            test_pos = 0
             print('training iteration: {}'.format(i))
             for j in tqdm(range(training_steps)):
-                files, batch_labels, new_position = dataset.get_filenames(batch_size, train_pos, 'training')
-                _, lossval = sess.run((opt, loss), feed_dict={filenames: files, labels: batch_labels})
-                train_pos = new_position
-                if j % 10 == 0:
-                    with open(log_dir + '/' + FLAGS.log_file, 'a') as f:
-                        f.write('lossval: {}, training_step: {}\n'.format(lossval, i * training_steps + j))
+                _, pred, lbl, lossval = sess.run((opt, prediction, labels, loss), {training_mode: True})
+                t_acc = np.sum(pred == lbl)
+                acc_percent = 100 * t_acc  / (batch_size)
+
+                with open(log_dir + '/' + FLAGS.log_file, 'a') as f:
+                    f.write('train_loss: {}, training_step: {}\n'.format(lossval, i * training_steps + j))
+                    f.write('train_accuracy: {}, training_step: {}\n'.format(acc_percent, i * training_steps + j))
 
 
                 if j % FLAGS.validation_frequency == FLAGS.validation_frequency - 1:
-                    acc = 0
+                    print('accuracy: {}'.format(t_acc))
+                    v_acc = 0
                     for _ in tqdm(range(validation_steps)):
-                        files, batch_labels, new_position = dataset.get_filenames(batch_size, test_pos, 'validation')
-                        lbl = sess.run(tf.argmax(output_layer, axis=1), feed_dict={filenames: files})
-                        acc += np.sum(lbl == batch_labels)
-                        acc_percent = 100 * acc / (batch_size * validation_steps)
+                        pred, lbl, lossval = sess.run((prediction, labels, loss), {training_mode: False})
+                        v_acc += np.sum(pred == lbl)
+                        acc_percent = 100 * v_acc / (batch_size * validation_steps)
                         with open(log_dir + '/' + FLAGS.log_file, 'a') as f:
+                            f.write('validation_loss: {}, training_step: {}\n'.format(lossval, i * training_steps + j))
                             f.write('accuracy: {}, training_step: {}\n'.format(acc_percent, i * training_steps + j))
 
 def main(_):
@@ -168,6 +175,8 @@ if __name__ == "__main__":
             + 'Otherwise, the network will use the existing partitions')
     parser.add_argument('--validation_frequency', type=int, default=100,
             help='The number of training steps between validation steps.')
+    parser.add_argument('--mean_var_file', type=str, default='mean_var.npz',
+            help='File containing numpy arrays of the mean and variance of the training set')
 
     FLAGS, unparsed = parser.parse_known_args()
     tf.app.run(main=main, argv=[sys.argv[0]] + unparsed)

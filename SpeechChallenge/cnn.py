@@ -48,13 +48,14 @@ def train():
     categories = tf.cond(training_mode, lambda: train_categories, lambda: validation_categories)
     labels = tf.random_uniform([batch_size], 0, len(categories), dtype=tf.int32)
     filenames = dataset.make_labelled_batch(categories, labels)
+    noise = dataset.get_noise_files(batch_size)
     mean_var = np.load(FLAGS.mean_var_file)
     mean = tf.constant(mean_var['mean'])
     var = tf.constant(mean_var['var'])
 
 
     # Define the cnn-one-fpool13 network
-    input_layer = tf.expand_dims(cnn.load_and_process_batch(filenames, mean, var), 3)
+    input_layer = tf.expand_dims(cnn.load_and_process_batch(filenames, noise, mean, var), 3)
     conv1 = tf.layers.conv2d(
             inputs=input_layer, 
             filters=64,
@@ -137,10 +138,11 @@ def train():
                     for _ in tqdm(range(validation_steps)):
                         pred, lbl, lossval = sess.run((prediction, labels, loss), {training_mode: False})
                         v_acc += np.sum(pred == lbl)
-                        acc_percent = 100 * v_acc / (batch_size * validation_steps)
                         with open(log_dir + '/' + FLAGS.log_file, 'a') as f:
                             f.write('validation_loss: {}, training_step: {}\n'.format(lossval, i * training_steps + j))
-                            f.write('accuracy: {}, training_step: {}\n'.format(acc_percent, i * training_steps + j))
+                    acc_percent = 100 * v_acc / (batch_size * validation_steps)
+                    with open(log_dir + '/' + FLAGS.log_file, 'a') as f:
+                        f.write('accuracy: {}, training_step: {}\n'.format(acc_percent, i * training_steps + j))
 
 def main(_):
     if tf.gfile.Exists(FLAGS.log_dir):

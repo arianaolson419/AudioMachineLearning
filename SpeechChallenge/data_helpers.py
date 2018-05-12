@@ -77,7 +77,6 @@ def make_labelled_batch(categories, index_sequence):
     return mapped
 
 def make_labelled_data():
-    import tensorflow as tf
     train_data = [[] for _ in label_dict]
     validation_data = [[] for _ in label_dict]
 
@@ -106,3 +105,31 @@ def make_labelled_data():
     validation_tensors = [tf.constant([str(path) for path in cat], dtype=tf.string) for cat in validation_data]
     return train_tensors, validation_tensors
 
+def get_noise_files(batch_size, noise_type='all'):
+    """Makes a list of files randomly chosen from the set of background noise files.
+
+    Parameters
+    ----------
+    batch_size : The number of noise files to return.
+    noise_type : One of 'all', 'recorded', 'generated'. The noises are
+        either computer generated or recorded. Choose and option of the types
+        of noise to use.
+
+    Returns
+    -------
+    A list of tensors of type tf.string, each representing a noise file
+    """
+    recorded_noise = ['doing_the_dishes.wav', 'dude_miaowing.wav',
+            'exercise_bike.wav', 'running_tap.wav']
+    generated_noise = ['white_noise.wav', 'pink_noise.wav']
+    all_noise = recorded_noise + generated_noise
+
+    if noise_type == 'recorded':
+        choose_dir = recorded_noise
+    elif noise_type == 'generated':
+        choose_dir = generated_noise
+    else:
+        choose_dir = all_noise
+
+    rootdir = 'train/audio/_background_noise_/'
+    return tf.constant([rootdir + random.choice(choose_dir) for _ in range(batch_size)], dtype=tf.string)

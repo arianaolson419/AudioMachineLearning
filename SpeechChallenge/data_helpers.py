@@ -3,7 +3,8 @@
 
 import random
 import math
-import pickle
+
+import tensorflow as tf
 
 # Hashing libraries
 import re
@@ -42,7 +43,7 @@ def choose_set(filename, validation_percentage=10):
         which set the file should be partitioned into.
     """
     filename = filename.strip('.wav')
-    _, speaker_id, _, _= re.split('[_/]', filename)
+    speaker_id, _, _ = re.split('[_]', filename)
     speaker_id = speaker_id.encode('utf-8')
     hashed_speaker_id = hashlib.sha1(speaker_id).hexdigest()
     percentage_hash = ((int(hashed_speaker_id, 16) % (MAX_NUM_WAVS_PER_CLASS + 1)) * (100.0 / MAX_NUM_WAVS_PER_CLASS))
@@ -51,187 +52,35 @@ def choose_set(filename, validation_percentage=10):
     else:
         return 'training'
 
-def make_dataset_dicts(validation_percentage, dest_file):
-    """Partitions the dataset into two dictionaries and pickles them to a destination file.
+def make_labelled_batch(categories, index_sequence):
     """
-    training_dict = {}
-    validation_dict = {}
-    base = 'train/audio'
-    for k, v in label_dict.items():
-        training_dict[v] = []
-        validation_dict[v] = []
-
-    for command in all_commands:
-        path = base + '/' + command
-        for _, _, clips in os.walk(path):
-            for clip in clips:
-                filename = command + '/' + clip
-                partition = choose_set(filename, validation_percentage)
-                if command in legal_commands:
-                    label = label_dict[command]
-                else:
-                    label = label_dict['unknown']
-                if partition == 'training':
-                    training_dict[label].append(filename)
-                if partition == 'validation':
-                    validation_dict[label].append(filename)
-    with open(dest_file, 'wb') as f:
-        pickle.dump((training_dict, validation_dict), f)
-
-def get_filenames2(batch_size, data_dict):
-    silence_file = 'train/audio/_silence_/silence.wav'
-    silence_label = label_dict['silence']
-    unknown_label = label_dict['unknown']
-    
-    num_other = int(batch_size * 1 / len(all_categories))
-
-    filenames = []
-    labels = []
-
-    for _ in range(batch_size - 2 * num_other):
-        label = label_dict[random.choice(legal_commands)]
-        wav_path = random.choice(data_dict[label])
-        labels.append(label)
-        filenames.append(wav_path)
-    
-    for _ in range(num_other):
-        labels.append(unknown_label)
-        filenames.append(random.choice(data_dict[unknown_label]))
-        labels.append(silence_label)
-        filenames.append(silence_file)
-
-    return filenames
-
-def partition_dataset(validation_percentage, overwrite=False):
-    """Writes the names of all of the files in the dataset to either
-    'training.txt' or 'validation.txt'.
-
-    Parameters
-    ----------
-    overwrite : a boolean indicating whether or not to overwrite existing text
-        files. Defaults to False.
+    Given 'categories', a list of tensors of possibly non-uniform size, and 'index_sequence', 
+    a sequence of indices into the 'categories' list, returns a tensor whose ith element is a 
+    value randomly selected from the tensor at 'categories[index_sequence[i]]'.
     """
-    base = 'train/audio/'
-    files = ['training.txt', 'training_unknown.txt', 'validation.txt', 'validation_unknown.txt']
-    for f in files:
-        if os.path.isfile(f) and overwrite:
-            os.remove(f)
-        elif os.path.isfile(f) and not overwrite:
-            return
-
-    for command in all_commands:
-        path = base + command
-        for _, _, clips in os.walk(path):
-            for clip in clips:
-                filename = command + '/' + clip
-                partition = choose_set(filename, validation_percentage)
-                if command in legal_commands:
-                    destination_file = partition + '.txt'
-                else:
-                    destination_file = partition + '_unknown.txt'
-                with open(destination_file, 'a') as f:
-                    f.write(filename + '\n')
-    for f in files:
-        shuffle_partitioned_files(f)
-
-def shuffle_partitioned_files(partition):
-    """'training.txt' and 'validation.txt' are written to in order, so they
-    must be shuffled before being input into the network.
-
-    Parameters
-    ----------
-    partition : the partitioned file to shuffle. Either 'training.txt' or
-        'validation.txt'.
-    """
-    with open(partition, 'r') as f:
-        data = [(random.random(), line) for line in f]
-    data.sort()
-    with open(partition, 'w') as f:
-        for _, line in data:
-            f.write(line)
-
-def count_lines(filename):
-    """Counts the number of lines in a txt file, corresponding to the number of
-    files partitioned into that dataset.
-
-    Parameters
-    ----------
-    filename : A file representing the partitioned dataset. Either
-        'trainning.txt' or 'validation.txt'.
-
-    Returns
-    -------
-    line_count : the number of lines in the file.
-    """
-    with open(filename, 'r') as f:
-        line_count = 0
-        for line in f:
-            line_count += 1
-    return line_count
-
-def get_filenames(batch_size, file_pointer=0, file_pointer_unknown=0, mode='training'):
-    """Gets a list of paths to files in one of the partitioned dataset text files,
-    training.txt or validation.txt.
-
-    Parameters
-    ----------
-    batch_size : the number of audio clips to return. Will return as many as
-        possible if there are fewer than batch_size clips left in the file.
-    file_pointer : the location in the file in which to start reading lines.
-    file_pointer_unknown : the location in the file of commands categorized
-        'unknown' in which to start reading lines.
-    mode : a string, either 'training' or 'validation'. This determines which
-        partitioned dataset the audio clips will be read from. Defaults to
-        'training'.
-
-    Returns
-    -------
-    filepaths, labels, new_position
-    filepaths : a list of paths to files from the desired training set
-    label_ints : a list of labels coded as integers from label_dict
-    new_position : the number of bytes into the partitoned dataset file where the functon stopped reading.
-    new_position_unknown : the number of bytes into the dataset file with the
-        'unknown' commands where the function stopped reading.
-    """
-
-    num_unknown = int(math.floor(batch_size * 1 / len(all_categories)))
-    num_silence = int(math.floor(batch_size * 1 / len(all_categories)))
-    num_commands = int(batch_size - num_unknown - num_silence)
-
-    base = 'train/audio/'
-    with open(mode + '.txt') as f:
-        f.seek(file_pointer)
-        filepaths = []
-        for _ in range(num_commands):
-            if os.path.getsize(mode + '.txt') < f.tell():
-                f.seek(0)
-            filepaths.append(base + f.readline().strip('\n'))
-        new_position = f.tell()
-
-    with open(mode + '_unknown.txt') as f:
-        f.seek(file_pointer_unknown)
-        for _ in range(num_unknown):
-            if os.path.getsize(mode + '_unknown.txt') < f.tell():
-                f.seek(0)
-            filepaths.append(base + f.readline().strip('\n'))
-        new_position_unknown = f.tell()
-    
-    for _ in range(num_silence):
-        filepaths.append(base + '_silence_/silence.wav')
-
-    random.shuffle(filepaths)
-
-    get_labels = lambda x: x.split('/')[2].strip('_')
-    legal_labels = lambda x: 'unknown' if get_labels(x) not in all_categories else get_labels(x)
-    labels_to_ints = lambda x: label_dict[legal_labels(x)]
-    
-    label_ints = list(map(labels_to_ints, filepaths))
-
-    return filepaths, label_ints, new_position, new_position_unknown
+    assert len(index_sequence.shape) == 1
+    tensors = tf.TensorArray(
+        dtype = tf.string,
+        size = len(categories),
+        dynamic_size = False,
+        clear_after_read = False,
+        infer_shape = False,
+    )
+    for i, filename_tensor in enumerate(categories):
+        tensors = tensors.write(i, filename_tensor)
+    def get_file_name_at(idx):
+        category = tensors.read(idx)
+        return category[tf.random_uniform([], 0, tf.shape(category)[0], dtype=tf.int32)]
+    mapped = tf.map_fn(get_file_name_at, index_sequence, dtype=tf.string)
+    if index_sequence.shape[0] is not None:
+        mapped.set_shape(index_sequence.shape)
+    return mapped
 
 def make_labelled_data():
     import tensorflow as tf
-    data = [[] for _ in label_dict]
+    train_data = [[] for _ in label_dict]
+    validation_data = [[] for _ in label_dict]
+
     legal = frozenset(legal_commands)
     rootdir = pathlib.Path('train') / 'audio'
     for d in rootdir.iterdir():
@@ -239,14 +88,22 @@ def make_labelled_data():
             continue
         label = d.name if d.name != '_silence_' else 'silence'
         try:
-            dest = data[label_dict[label]]
+            idx = label_dict[label]
         except KeyError:
-            dest = data[label_dict['unknown']]
+            idx = label_dict['unknown']
         for wavfile in d.iterdir():
             if wavfile.name[-4:] != '.wav':
-                #print("[warning] '{}' is not a wavfile.".format(wavfile), file=sys.stderr)
                 print('warning "{}" is not a wavfile.'.format(wavfile))
                 continue
-            dest.append(wavfile)
-    return [tf.constant([str(path) for path in cat], dtype=tf.string) for cat in data]
+            if wavfile.name == 'silence.wav':
+                train_data[label_dict['silence']].append(wavfile)
+                validation_data[label_dict['silence']].append(wavfile)
+                continue
+            if choose_set(wavfile.name) == 'training':
+                train_data[idx].append(wavfile)
+            elif choose_set(wavfile.name) == 'validation':
+                validation_data[idx].append(wavfile)
+    train_tensors = [tf.constant([str(path) for path in cat], dtype=tf.string) for cat in train_data]
+    validation_tensors = [tf.constant([str(path) for path in cat], dtype=tf.string) for cat in validation_data]
+    return train_tensors, validation_tensors
 

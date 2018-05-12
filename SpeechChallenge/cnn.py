@@ -26,37 +26,6 @@ import argparse
 
 FLAGS = None
 
-def check_is_file(filenames, labels):
-    check = lambda x : os.path.isfile(x)
-    for i, f in enumerate(filenames):
-        if not check(f):
-            print('{} is not file.'.format(f))
-            filenames[i] = 'train/audio/_silence_/silence.wav'
-            labels[i] = dataset.label_dict['silence']
-
-def make_labelled_batch(categories, index_sequence):
-    """
-    Given 'categories', a list of tensors of possibly non-uniform size, and 'index_sequence', 
-    a sequence of indices into the 'categories' list, returns a tensor whose ith element is a 
-    value randomly selected from the tensor at 'categories[index_sequence[i]]'.
-    """
-    assert len(index_sequence.shape) == 1
-    tensors = tf.TensorArray(
-        dtype = tf.string,
-        size = len(categories),
-        dynamic_size = False,
-        clear_after_read = False,
-        infer_shape = False,
-    )
-    for i, filename_tensor in enumerate(categories):
-        tensors = tensors.write(i, filename_tensor)
-    def get_file_name_at(idx):
-        category = tensors.read(idx)
-        return category[tf.random_uniform([], 0, tf.shape(category)[0], dtype=tf.int32)]
-    mapped = tf.map_fn(get_file_name_at, index_sequence, dtype=tf.string)
-    if index_sequence.shape[0] is not None:
-        mapped.set_shape(index_sequence.shape)
-    return mapped
 
 def train():
     if not os.path.exists('train/audio/_silence_/silence.wav'):
@@ -74,14 +43,15 @@ def train():
 
     he = tf.contrib.keras.initializers.he_normal
 
-    mean_var = np.load(FLAGS.mean_var_file)
-
-    categories = dataset.make_labelled_data()
+    training_mode = tf.placeholder(tf.bool, ())
+    train_categories, validation_categories = dataset.make_labelled_data()
+    categories = tf.cond(training_mode, lambda: train_categories, lambda: validation_categories)
     labels = tf.random_uniform([batch_size], 0, len(categories), dtype=tf.int32)
-    filenames = make_labelled_batch(categories, labels)
+    filenames = data.make_labelled_batch(categories, labels)
     mean_var = np.load(FLAGS.mean_var_file)
     mean = tf.constant(mean_var['mean'])
     var = tf.constant(mean_var['var'])
+
 
     # Define the cnn-one-fpool13 network
     input_layer = tf.expand_dims(cnn.load_and_process_batch(filenames, mean, var), 3)
@@ -152,7 +122,7 @@ def train():
         for i in range(training_iterations):
             print('training iteration: {}'.format(i))
             for j in tqdm(range(training_steps)):
-                _, pred, lbl, lossval = sess.run((opt, prediction, labels, loss))
+                _, pred, lbl, lossval = sess.run((opt, prediction, labels, loss), {training_mode: True})
                 t_acc = np.sum(pred == lbl)
                 acc_percent = 100 * t_acc  / (batch_size)
 
@@ -163,14 +133,14 @@ def train():
 
                 if j % FLAGS.validation_frequency == FLAGS.validation_frequency - 1:
                     print('accuracy: {}'.format(t_acc))
-#                    v_acc = 0
-#                    for _ in tqdm(range(validation_steps)):
-#                        pred, lbl, lossval = sess.run((prediction, labels, loss))
-#                        v_acc += np.sum(pred == lbl)
-#                        acc_percent = 100 * v_acc / (batch_size * validation_steps)
-#                        with open(log_dir + '/' + FLAGS.log_file, 'a') as f:
-#                            f.write('validation_loss: {}, training_step: {}\n'.format(lossval, i * training_steps + j))
-#                            f.write('accuracy: {}, training_step: {}\n'.format(acc_percent, i * training_steps + j))
+                    v_acc = 0
+                    for _ in tqdm(range(validation_steps)):
+                        pred, lbl, lossval = sess.run((prediction, labels, loss), {training_mode: False})
+                        v_acc += np.sum(pred == lbl)
+                        acc_percent = 100 * v_acc / (batch_size * validation_steps)
+                        with open(log_dir + '/' + FLAGS.log_file, 'a') as f:
+                            f.write('validation_loss: {}, training_step: {}\n'.format(lossval, i * training_steps + j))
+                            f.write('accuracy: {}, training_step: {}\n'.format(acc_percent, i * training_steps + j))
 
 def main(_):
     if tf.gfile.Exists(FLAGS.log_dir):

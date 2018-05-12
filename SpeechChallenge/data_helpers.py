@@ -3,7 +3,8 @@
 
 import random
 import math
-import pickle
+
+import tensorflow as tf
 
 # Hashing libraries
 import re
@@ -87,16 +88,15 @@ def make_labelled_data():
             continue
         label = d.name if d.name != '_silence_' else 'silence'
         try:
-            #dest = data[label_dict[label]]
             idx = label_dict[label]
         except KeyError:
-            #dest = data[label_dict['unknown']]
             idx = label_dict['unknown']
         for wavfile in d.iterdir():
             if wavfile.name[-4:] != '.wav':
                 continue
             if wavfile.name == 'silence.wav':
                 train_data[label_dict['silence']].append(wavfile)
+                validation_data[label_dict['silence']].append(wavfile)
                 continue
             if choose_set(wavfile.name) == 'training':
                 train_data[idx].append(wavfile)

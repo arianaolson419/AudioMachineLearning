@@ -47,7 +47,7 @@ def train():
     train_categories, validation_categories = dataset.make_labelled_data()
     categories = tf.cond(training_mode, lambda: train_categories, lambda: validation_categories)
     labels = tf.random_uniform([batch_size], 0, len(categories), dtype=tf.int32)
-    filenames = data.make_labelled_batch(categories, labels)
+    filenames = dataset.make_labelled_batch(categories, labels)
     mean_var = np.load(FLAGS.mean_var_file)
     mean = tf.constant(mean_var['mean'])
     var = tf.constant(mean_var['var'])

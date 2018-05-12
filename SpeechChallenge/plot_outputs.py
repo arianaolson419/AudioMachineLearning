@@ -64,8 +64,8 @@ def plot_data(data):
     v_loss_x = np.array([loss[0] for loss in data['validation_loss']])
     v_loss_y = np.array([loss[1] for loss in data['validation_loss']])
 
-    acc_x = np.array([acc[0] for acc in data['accuracy']])
-    acc_y = np.array([acc[1] for acc in data['accuracy']])
+    v_acc_x = np.array([acc[0] for acc in data['accuracy']])
+    v_acc_y = np.array([acc[1] for acc in data['accuracy']])
 
     plt.subplot(2, 1, 1)
     t_losses = plt.plot(t_loss_x, t_loss_y, 'b')
@@ -77,19 +77,56 @@ def plot_data(data):
     plt.legend()
 
     plt.subplot(2, 1, 2)
-    accuracies = plt.plot(acc_x, acc_y, 'g')
     train_accuracies = plt.plot(t_acc_x, t_acc_y, 'k')
-    plt.setp(accuracies, label='validation accuracies')
+    validation_accuracies = plt.plot(v_acc_x, v_acc_y, 'g')
+    plt.setp(validation_accuracies, label='validation accuracies')
     plt.setp(train_accuracies, label='training accuracies')
     plt.xlabel('Training steps')
     plt.ylabel('Accuracy percentage')
     plt.legend()
     plt.show()
 
+def save_data(data, save_path):
+    t_loss_x = np.array([loss[0] for loss in data['train_loss']])
+    t_loss_y = np.array([loss[1] for loss in data['train_loss']])
+
+    t_acc_x = np.array([acc[0] for acc in data['train_accuracy']])
+    t_acc_y = np.array([acc[1] for acc in data['train_accuracy']])
+
+    v_loss_x = np.array([loss[0] for loss in data['validation_loss']])
+    v_loss_y = np.array([loss[1] for loss in data['validation_loss']])
+
+    v_acc_x = np.array([acc[0] for acc in data['accuracy']])
+    v_acc_y = np.array([acc[1] for acc in data['accuracy']])
+
+    np.savez(save_path,
+            t_loss_x=t_loss_x,
+            t_loss_y=t_loss_y,
+            t_acc_x=t_acc_x,
+            t_acc_y=t_acc_y,
+            v_loss_x=v_loss_x,
+            v_loss_y=v_loss_y,
+            v_acc_x=v_acc_x,
+            v_acc_y=v_acc_y)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--log_file_path', type=str, default='cnn_output_logs/cnn_output.txt',
             help='The path to the output file to plot')
+    parser.add_argument('--plot', type=bool, default=False,
+            help='Plot the data at log_file_path')
+    parser.add_argument('--save_output', type=bool, default=False,
+            help='Save the data in the log file to a .npz file.')
+    parser.add_argument('--save_path', type=str,
+            help='A path where a .npz file of the data will be saved')
     FLAGS, unparsed = parser.parse_known_args()
     data = read_file(FLAGS.log_file_path)
-    plot_data(data)
+
+    if FLAGS.plot:
+        plot_data(data)
+
+    if FLAGS.save_output:
+        if FLAGS.save_path:
+            save_data(data)
+        else:
+            print('Please provide a file to save to')

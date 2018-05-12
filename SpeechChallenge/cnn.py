@@ -40,6 +40,7 @@ def train():
     # Training parameters
     batch_size = FLAGS.batch_size
     learning_rate = FLAGS.learning_rate
+    background_volume_range = FLAGS.background_volume
 
     he = tf.contrib.keras.initializers.he_normal
 
@@ -55,7 +56,7 @@ def train():
 
 
     # Define the cnn-one-fpool13 network
-    input_layer = tf.expand_dims(cnn.load_and_process_batch(filenames, noise, mean, var), 3)
+    input_layer = tf.expand_dims(cnn.load_and_process_batch(filenames, noise, mean, var, background_volume_range=background_volume_range), 3)
     conv1 = tf.layers.conv2d(
             inputs=input_layer, 
             filters=64,
@@ -179,6 +180,8 @@ if __name__ == "__main__":
             help='The number of training steps between validation steps.')
     parser.add_argument('--mean_var_file', type=str, default='mean_var.npz',
             help='File containing numpy arrays of the mean and variance of the training set')
+    parser.add_argument('--background_volume', type=float, default=0,
+            help='The maximum amount with which to scale the added background noise')
 
     FLAGS, unparsed = parser.parse_known_args()
     tf.app.run(main=main, argv=[sys.argv[0]] + unparsed)

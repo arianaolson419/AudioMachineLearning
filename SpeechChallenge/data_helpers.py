@@ -8,7 +8,7 @@ import pickle
 # Hashing libraries
 import re
 import os.path
-import pathlib
+import pathlib2 as pathlib
 import hashlib
 import sys
 
@@ -244,7 +244,8 @@ def make_labelled_data():
             dest = data[label_dict['unknown']]
         for wavfile in d.iterdir():
             if wavfile.name[-4:] != '.wav':
-                print("[warning] '{}' is not a wavfile.".format(wavfile), file=sys.stderr)
+                #print("[warning] '{}' is not a wavfile.".format(wavfile), file=sys.stderr)
+                print('warning "{}" is not a wavfile.'.format(wavfile))
                 continue
             dest.append(wavfile)
     return [tf.constant([str(path) for path in cat], dtype=tf.string) for cat in data]

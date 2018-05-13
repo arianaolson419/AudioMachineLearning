@@ -1,6 +1,6 @@
 # Convolutional Neural Networks for Keyword Classification
 ## Introduction
-Convolutional neural networks (CNN) are commonly used for image classification because they are able to generalize an image into a set of features. CNNs can be used similarly for audio recognition. Spectrograms of audio clips are classified like images would be. I designed a CNN architecture to classify a small set of short spoken words. Thank you to [tvanslyke](https://github.com/tvanslyke) and Paul Ruvolo for contributions and advice on this project.
+Convolutional neural networks (CNNs) are commonly used for image classification because they are able to generalize an image into a set of features. CNNs can be used similarly for audio recognition. Spectrograms of audio clips are classified like images would be. I designed a CNN architecture to classify a small set of short spoken words. Thank you to [tvanslyke](https://github.com/tvanslyke) and Paul Ruvolo for contributions and advice on this project.
 
 This network completes a task based on the TensorFlow Speech Recognition Challenge from Kaggle [found here](https://www.kaggle.com/c/tensorflow-speech-recognition-challenge). My goal was to build a neural network capable of classifying several keywords from the TensorFlow Speech Recognition data set. The keywords classified by the network described here are "yes", "no", "up", "down", "left", "right", "on", "off", "stop", "go", "silence", and "unknown".
 

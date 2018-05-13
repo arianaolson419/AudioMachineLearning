@@ -60,5 +60,25 @@ The layers use a leaky RELU activation function. Layer normalization is applied 
 The loss function apploed to the output of the network is a sparse softmax cross entropy function. The optimizer is uses the Adam optimization algorithm.
 
 ## Results
+### Without Noise
+![The losses and percent accuracies of the network when no noise is added.](images/without_noise.png)
+As can be seen above, the network learns quickly on the standardized audio with no addtional background noise, and then returns diminish with more training steps. The network whose losses and accuracies is shown above was trained with a learning rae of 0.0001. 10% of the labelled dataset was used for validation. At it's best, the network can perform with around 90% accuracy. Notice that around training step 1400, the validation losses and accuracies begin to deviate away from the trend in training loss and accuracies and decrease. This means that the network is most likely overfit to the data in the training partition. The number of iterations through the training data should be decreased to account for this, however, the overfitting problem may also be improved by adding background noise to the samples.
+### With Added Noise
+![The losses and percent accuracies of the network when scaled background noise is added.](images/withmorenoise_plot.png)
+The plots above depict the losses and accuracies of the network when some background noise is added to the samples. In this case, the noise was scaled between 0 and 0.3 of its original amplitude before being added to the data. Adding this noise appears to help with the overfitting problem, which means that the accuracy of the network slightly improves. For this run, the background noise was randomly selected from the available files, but always the first second of the clip was used, and not a random slice of the much longer clip. It would be interesting to see how the performance of the network may change if there is a greater variety to the added noise.
+
 ## Future Work
+There are a lot of improvements that can be made to the network and extra features to be built on top of it. One of the additional features that would be interesting would be to build a test program that classifies spoken words that it prompts from the user. Additionally, more metrics of the performance could be measured, and variations of the audio preprocessing could be implemented to see if performance can be improved in this way.
+
+As a general imprivement, I would like to work on the organization of the code to make it more flexible to different experiments. I would also like to better document functions that are lacking in explanation.
 ## Reflection
+At the beginning of this self study, I had the following learning goals:
+- Learn about the tools and strategies used to solve problems with machine learning
+- Gain a deeper understanding of audio coding and how humans and computers process sound
+- Create a well-documented tool that can be shared with the wider community
+
+This project went in a different direction than I initially intended. I was hoping that this project would address the second learning goal more in depth than it did. Although I did learn how to use spectrograms for machine learning, this was not the bulk of the time spent on the project. Most of my time went into learning how to use TensorFlow effectively, which heavily addressed the first learning goal. I am happy with my learnings on this project, however I think that if I were to redesign the curriculum of this course, I would give much more time to the final project and I would focus less heavily on also trying to learn another specific skill such as audio processing. I think that I am still in the progress of making a well documented tool, but I would like to continue working on this network as a side project, so hopwfully I will reach this goal to the level I set myself.
+
+Some of the biggest challenges on this project were learning how to use and debug TensorFlow, and designing an effective convolutional network without a regular class structure where I would have much more interaction with professors, teaching assistants, and fellow classmates to work out problems. It took a much longer time than I expected to debug my problems as they popped up without this level of support.
+
+Overall, I am very happy with my learning throughout this project. I feel comfortable with TensorFlow, and I have the tools to continue learning about other applications of audio machine learning.

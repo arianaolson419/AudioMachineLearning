@@ -35,25 +35,29 @@ It has been shown that adding some background noise to samples before adding the
 ### Make Log-mel Spectrograms
 A spectrogram is a representation of frequency content of a signal over time. It is created by taking the short time Fourier transform of small overlapping windows of the signal and and plotting them over time. A log-mel spectrogram scales the frequency content of the signal to more closely match how the human ear perceives sound. An example of the spectrogram of an utterance of the word "left" is shown below. 
 
-![A spectrogram of the utterance "left". On the vertical axis are the mel frequency bins (there are 40 in this example) and the horizontal axis is the time axis. The data is shown as a heat map, with more power in a region shown as a warmer color. There is a region of higher power close to the middle of the plot, and most of the rest of the plot is a dark blue][images/example_spec.png]
+![A spectrogram of the utterance "left". On the vertical axis are the mel frequency bins (there are 40 in this example) and the horizontal axis is the time axis. The data is shown as a heat map, with more power in a region shown as a warmer color. There is a region of higher power close to the middle of the plot, and most of the rest of the plot is a dark blue](images/example_spec.png)
 
 For this project, each spectrogram is created using 40 mel bins, a frame width of 25 milliseconds, and a frame shift of 10 milliseconds.
 
 The tensorflow.contrib.signal library was used to create the spectrograms. Example code for this library can be found in the  [Signal Processing (contrib)](https://www.tensorflow.org/api_guides/python/contrib.signal#Computing_Mel_Frequency_Cepstral_Coefficients_MFCCs_) tutorial.
 
 ### Convolutional Neural Network
-The specrograms are fed in batches into a fully convolutional neural network, the layers of which are depicted in the diagram below. The network has five convolutional layers. The first four increase the number of features by powers of two while reducing the dinmensions of the spectrograms. The layers use the Leaky RELU activation function. Layer normalization is applied to the outputs of these four layers. The final convolutional layer reduces the number of features to the number of categories, in this case 12. The kernel size and stride dimensions of the layers are shown in the table below.
+The specrograms are fed in batches into a fully convolutional neural network, the layers of which are depicted in the diagram below. The network has five convolutional layers. The first four increase the number of features by powers of two while reducing the dinmensions of the spectrograms.
 
-![A block diagram depicting the layer architecture of the convolutional neural network. The sizes of the output tensors of each layer are depicted next to the layers. These sizes can also be found in the table below][images/CNNLayers.png]
+![A block diagram depicting the layer architecture of the convolutional neural network. The sizes of the output tensors of each layer are depicted next to the layers. These sizes can also be found in the table below](images/CNNLayers.png)
 
-| Layer       | Kernel Size           | Strides  | Features | Shape |
-| :-----------: |:-------------:| :----:| :---: | :---: | :---: |
-| input_layer | - | - | 1 | (batch_size, 98, 40, 1) |
-| conv1 | (8, 8) | (5, 3) | 64 |
-| conv2 |   |   |   |   |
-| conv3 |   |   |   |   |
-| conv4 |   |   |   |   |
-| conv5 |   |   |   |   |
+The layers use a leaky RELU activation function. Layer normalization is applied to the outputs of these four layers. The final convolutional layer reduces the number of features to the number of categories, in this case 12. The kernel size and stride dimensions of the layers are shown in the table below.
+
+ Layer       | Kernel Size | Strides  | Features | Shape 
+ ----------- |-------------| ---------| -------- | -----
+ input_layer | - | - | 1 | (batch_size, 98, 40, 1) 
+ conv1 | (8, 8) | (5, 3) | 64 | (batch_size, 20, 14, 64)
+ conv2 | (8, 6) | (3, 2) | 128 | (batch_size, 7, 7, 128)
+ conv3 | (5, 5) | (2, 2) | 256 | (batch_size, 4, 4, 256)
+ conv4 | (2, 2) | (2, 2) | 512 | (batch_size, 2, 2, 512)
+ conv5 | (2, 2) | (2, 2) | 12 | (batch_size, 1, 1, 12)
+
+The loss function apploed to the output of the network is a sparse softmax cross entropy function. The optimizer is uses the Adam optimization algorithm.
 
 ## Results
 ## Future Work
